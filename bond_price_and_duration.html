@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RSM1631: Bond Price and Duration</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --color-a: #0072B2; --color-b: #E69F00;
+    --bg: #faf9f7; --panel-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b7280;
+    --border: #e5e2dd; --accent: #1a1a1a; --input-bg: #f5f4f2;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  }
+  body { font-family: 'Source Serif 4', Georgia, serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 2rem 1.5rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.6rem; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 0.25rem; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 2rem; }
+
+  .bond-section { margin-bottom: 1.5rem; }
+
+  .controls-row {
+    background: var(--panel-bg); border: 1px solid var(--border); border-radius: 12px;
+    padding: 1.2rem 1.5rem; box-shadow: var(--shadow);
+    display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;
+  }
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--text-muted);
+    display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;
+  }
+  .section-label .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  .slider-block { flex: 1; min-width: 180px; }
+  .slider-header {
+    display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.25rem;
+  }
+  .slider-header label {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; font-weight: 500; color: var(--text-muted);
+  }
+  .slider-value {
+    font-family: 'Source Serif 4', Georgia, serif; font-size: 0.88rem; font-weight: 500; color: var(--text);
+  }
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 6px;
+    border-radius: 3px; background: var(--border); outline: none; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+    border-radius: 50%; background: var(--accent); border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.25); cursor: pointer; transition: transform 0.1s;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+  input[type="range"]::-moz-range-thumb {
+    width: 18px; height: 18px; border-radius: 50%; background: var(--accent);
+    border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.25); cursor: pointer;
+  }
+
+  .chart-panel {
+    background: var(--panel-bg); border: 1px solid var(--border); border-radius: 12px;
+    padding: 1.5rem; box-shadow: var(--shadow); margin-top: 0.75rem;
+  }
+  canvas { width: 100%; height: auto; display: block; }
+
+  .chart-legend {
+    display: flex; gap: 1.4rem; align-items: center; flex-wrap: wrap;
+    margin-top: 0.9rem; padding-top: 0.8rem; border-top: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text-muted);
+  }
+  .legend-item { display: flex; align-items: center; gap: 0.45rem; }
+  .legend-square {
+    width: 13px; height: 13px; border: 1.5px dashed #b5b2ab;
+    background: rgba(0,0,0,0.02); flex-shrink: 0;
+  }
+  .legend-circle {
+    width: 13px; height: 13px; border-radius: 50%; border: 2px solid currentColor;
+    flex-shrink: 0;
+  }
+  .legend-circle.a { color: var(--color-a); background: rgba(0,114,178,0.15); }
+  .legend-circle.b { color: var(--color-b); background: rgba(230,159,0,0.15); }
+
+  /* Toggle switch */
+  .toggle-bar { display: flex; align-items: center; gap: 0.85rem; margin: 0.5rem 0 1.5rem; }
+  .toggle-bar .toggle-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; font-weight: 500;
+    color: var(--text-muted); letter-spacing: 0.04em;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .toggle-bar .toggle-label .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--color-b); }
+  .switch { position: relative; display: inline-block; width: 42px; height: 23px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch-track {
+    position: absolute; cursor: pointer; inset: 0;
+    background: var(--border); border-radius: 23px; transition: background 0.2s;
+  }
+  .switch-track::before {
+    content: ""; position: absolute; height: 17px; width: 17px;
+    left: 3px; bottom: 3px; background: #fff; border-radius: 50%;
+    transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  }
+  .switch input:checked + .switch-track { background: var(--color-b); }
+  .switch input:checked + .switch-track::before { transform: translateX(19px); }
+
+  .readouts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.5rem; }
+  .readouts-row.single { grid-template-columns: 1fr; }
+  @media (max-width: 700px) { .readouts-row { grid-template-columns: 1fr; } }
+  .readout-panel {
+    background: var(--panel-bg); border: 1px solid var(--border); border-radius: 10px;
+    padding: 1rem 1.1rem; box-shadow: var(--shadow);
+  }
+  .readout-panel.bond-a-panel { border-color: var(--color-a); border-width: 1.5px; }
+  .readout-panel.bond-b-panel { border-color: var(--color-b); border-width: 1.5px; }
+  .readout-panel-title {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.7rem;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .readout-panel-title .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  .readout-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 0.4rem; }
+  .ro-label-sm {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; font-weight: 500;
+    color: var(--text-muted); letter-spacing: 0.03em; padding-bottom: 0.1rem;
+  }
+  .ro-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; font-weight: 500;
+    color: var(--text-muted); letter-spacing: 0.03em; padding-bottom: 0.3rem;
+  }
+  .readout-val {
+    font-family: 'Source Serif 4', Georgia, serif; font-size: 1.05rem; font-weight: 500;
+  }
+
+  .reset-btn {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
+    padding: 0.35rem 0.85rem; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--input-bg); color: var(--text-muted); cursor: pointer;
+    transition: background 0.15s, color 0.15s; white-space: nowrap; margin-top: 1rem;
+  }
+  .reset-btn:hover { background: var(--accent); color: #fff; }
+
+  .footer-row { display: flex; justify-content: flex-end; margin-top: 0.25rem; }
+
+  /* Price–yield panel */
+  .py-panel { margin-top: 1.5rem; }
+  .py-header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 1rem; flex-wrap: wrap; margin-bottom: 0.9rem;
+  }
+  .py-title {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted);
+  }
+  .py-toggle { display: flex; align-items: center; gap: 0.6rem; }
+  .py-toggle span {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 500;
+    color: var(--text-muted); letter-spacing: 0.03em;
+  }
+  .switch.sm { width: 36px; height: 20px; }
+  .switch.sm .switch-track::before { height: 14px; width: 14px; left: 3px; bottom: 3px; }
+  .switch.sm input:checked + .switch-track::before { transform: translateX(16px); }
+  .switch.sm input:checked + .switch-track { background: var(--accent); }
+  .legend-line { width: 18px; height: 0; border-top: 2.5px solid currentColor; flex-shrink: 0; }
+  .legend-line.a { color: var(--color-a); }
+  .legend-line.b { color: var(--color-b); }
+  .legend-dash { width: 18px; height: 0; border-top: 1.5px dashed #8a8781; flex-shrink: 0; }
+
+  /* Display (minimize) controls */
+  .display-bar {
+    display: flex; align-items: center; gap: 1.4rem; flex-wrap: wrap;
+    background: var(--panel-bg); border: 1px solid var(--border); border-radius: 10px;
+    padding: 0.7rem 1.1rem; box-shadow: var(--shadow); margin-bottom: 1.5rem;
+  }
+  .display-bar-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted);
+  }
+  .display-toggle { display: flex; align-items: center; gap: 0.55rem; }
+  .display-toggle span {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 500;
+    color: var(--text-muted); letter-spacing: 0.03em; white-space: nowrap;
+  }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>RSM1631: Bond Price and Duration</h1>
+  <p class="subtitle" style="margin-bottom:1.2rem">Calculating the price of a bond and visualizing duration as the balance point of PV of cash flows and comparing across bonds (assuming face value = $100, annual coupons)</p>
+
+  <div class="display-bar">
+    <span class="display-bar-label">Show</span>
+    <div class="display-toggle">
+      <label class="switch sm"><input type="checkbox" id="showTimelines" checked><span class="switch-track"></span></label>
+      <span>Cash-flow timelines</span>
+    </div>
+    <div class="display-toggle">
+      <label class="switch sm"><input type="checkbox" id="showReadouts" checked><span class="switch-track"></span></label>
+      <span>Price &amp; duration</span>
+    </div>
+    <div class="display-toggle">
+      <label class="switch sm"><input type="checkbox" id="showPY" checked><span class="switch-track"></span></label>
+      <span>Price–yield plot</span>
+    </div>
+  </div>
+
+  <!-- Bond A -->
+  <div class="bond-section">
+    <div class="controls-row">
+      <div class="section-label"><span class="dot" style="background:var(--color-a)"></span> Bond A</div>
+      <div class="slider-block">
+        <div class="slider-header"><label>Maturity (years)</label><span class="slider-value" id="matA-display">5</span></div>
+        <input type="range" id="matA" min="1" max="10" step="1" value="5">
+      </div>
+      <div class="slider-block">
+        <div class="slider-header"><label>Coupon (%)</label><span class="slider-value" id="cpnA-display">7.0</span></div>
+        <input type="range" id="cpnA" min="0" max="20" step="0.1" value="7">
+      </div>
+      <div class="slider-block">
+        <div class="slider-header"><label>Yield (%)</label><span class="slider-value" id="yldA-display">4.0</span></div>
+        <input type="range" id="yldA" min="0" max="20" step="0.1" value="4">
+      </div>
+    </div>
+    <div class="chart-panel" id="chartPanelA">
+      <canvas id="chartA" width="1000" height="340"></canvas>
+      <div class="chart-legend">
+        <div class="legend-item"><span class="legend-square"></span> Square area = cash flow</div>
+        <div class="legend-item"><span class="legend-circle a"></span> Circle area = present value</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toggle for second bond -->
+  <div class="toggle-bar">
+    <label class="switch">
+      <input type="checkbox" id="toggleB">
+      <span class="switch-track"></span>
+    </label>
+    <span class="toggle-label"><span class="dot"></span> Compare a second bond</span>
+  </div>
+
+  <!-- Bond B -->
+  <div class="bond-section hidden" id="bondBSection">
+    <div class="controls-row">
+      <div class="section-label"><span class="dot" style="background:var(--color-b)"></span> Bond B</div>
+      <div class="slider-block">
+        <div class="slider-header"><label>Maturity (years)</label><span class="slider-value" id="matB-display">4</span></div>
+        <input type="range" id="matB" min="1" max="10" step="1" value="4">
+      </div>
+      <div class="slider-block">
+        <div class="slider-header"><label>Coupon (%)</label><span class="slider-value" id="cpnB-display">3.0</span></div>
+        <input type="range" id="cpnB" min="0" max="20" step="0.1" value="3">
+      </div>
+      <div class="slider-block">
+        <div class="slider-header"><label>Yield (%)</label><span class="slider-value" id="yldB-display">5.0</span></div>
+        <input type="range" id="yldB" min="0" max="20" step="0.1" value="5">
+      </div>
+    </div>
+    <div class="chart-panel" id="chartPanelB">
+      <canvas id="chartB" width="1000" height="340"></canvas>
+      <div class="chart-legend">
+        <div class="legend-item"><span class="legend-square"></span> Square area = cash flow</div>
+        <div class="legend-item"><span class="legend-circle b"></span> Circle area = present value</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Readouts -->
+  <div class="readouts-row single" id="readoutsRow">
+    <div class="readout-panel bond-a-panel">
+      <div class="readout-panel-title"><span class="dot" style="background:var(--color-a)"></span> Bond A</div>
+      <div class="readout-grid">
+        <div></div>
+        <div class="ro-label-sm">Macaulay</div>
+        <div class="ro-label-sm">Modified</div>
+        <div class="ro-label">Price</div>
+        <div class="ro-label">Duration</div>
+        <div class="ro-label">Duration</div>
+        <div class="readout-val" id="priceA">—</div>
+        <div class="readout-val" id="macA">—</div>
+        <div class="readout-val" id="modA">—</div>
+      </div>
+    </div>
+    <div class="readout-panel bond-b-panel hidden" id="readoutB">
+      <div class="readout-panel-title"><span class="dot" style="background:var(--color-b)"></span> Bond B</div>
+      <div class="readout-grid">
+        <div></div>
+        <div class="ro-label-sm">Macaulay</div>
+        <div class="ro-label-sm">Modified</div>
+        <div class="ro-label">Price</div>
+        <div class="ro-label">Duration</div>
+        <div class="ro-label">Duration</div>
+        <div class="readout-val" id="priceB">—</div>
+        <div class="readout-val" id="macB">—</div>
+        <div class="readout-val" id="modB">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Price–yield relation -->
+  <div class="chart-panel py-panel" id="pyPanel">
+    <div class="py-header">
+      <span class="py-title">Price–Yield Relation</span>
+      <div class="py-toggle">
+        <label class="switch sm">
+          <input type="checkbox" id="toggleDur">
+          <span class="switch-track"></span>
+        </label>
+        <span>Show duration</span>
+      </div>
+    </div>
+    <canvas id="chartPY" width="1000" height="380"></canvas>
+    <div class="chart-legend">
+      <div class="legend-item"><span class="legend-line a"></span> Bond A</div>
+      <div class="legend-item hidden" id="pyLegendB"><span class="legend-line b"></span> Bond B</div>
+      <div class="legend-item hidden" id="pyLegendTan"><span class="legend-dash"></span> Tangent: slope = dP/dy</div>
+    </div>
+  </div>
+
+  <div class="footer-row">
+    <button class="reset-btn" id="resetBtn">↺ Reset</button>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+const el = {
+  toggleB: $('toggleB'), toggleDur: $('toggleDur'),
+  showTimelines: $('showTimelines'), showReadouts: $('showReadouts'), showPY: $('showPY'),
+  chartPanelA: $('chartPanelA'), chartPanelB: $('chartPanelB'), pyPanel: $('pyPanel'),
+  pyLegendB: $('pyLegendB'), pyLegendTan: $('pyLegendTan'),
+  bondBSection: $('bondBSection'), readoutB: $('readoutB'), readoutsRow: $('readoutsRow'),
+  matA: $('matA'), cpnA: $('cpnA'), yldA: $('yldA'),
+  matB: $('matB'), cpnB: $('cpnB'), yldB: $('yldB'),
+  matAd: $('matA-display'), cpnAd: $('cpnA-display'), yldAd: $('yldA-display'),
+  matBd: $('matB-display'), cpnBd: $('cpnB-display'), yldBd: $('yldB-display'),
+  priceA: $('priceA'), macA: $('macA'), modA: $('modA'),
+  priceB: $('priceB'), macB: $('macB'), modB: $('modB'),
+};
+
+const canvasA = $('chartA'), ctxA = canvasA.getContext('2d');
+const canvasB = $('chartB'), ctxB = canvasB.getContext('2d');
+const canvasPY = $('chartPY'), ctxPY = canvasPY.getContext('2d');
+
+const YIELD_MIN = 0, YIELD_MAX = 20;   // matches the yield sliders
+
+const NUM_FONT = '"Source Serif 4", Georgia, serif';
+const LABEL_SIZE = 13;
+const LINE_H = LABEL_SIZE + 3;
+
+// Vertical space reserved above the tallest square for CF / PV labels
+const ABOVE_LABEL = 2 * LINE_H + 8;
+const TOP_PAD = 8;
+const BELOW = 64;     // ticks + fulcrum + duration label
+const BEAM_THICK = 5;
+const SQUARE_CAP = 190;  // absolute cap on the largest square's side
+
+// --- Bond math ---
+function bondCalc(maturity, couponRate, yieldRate) {
+  const face = 100;
+  const cpn = face * couponRate / 100;
+  const y = yieldRate / 100;
+  const cashFlows = [];
+  let price = 0, macDur = 0;
+
+  for (let t = 1; t <= maturity; t++) {
+    const cf = (t === maturity) ? cpn + face : cpn;
+    const pv = cf / Math.pow(1 + y, t);
+    cashFlows.push({ t, cf, pv });
+    price += pv;
+    macDur += t * pv;
+  }
+  macDur = price > 0 ? macDur / price : 0;
+  const modDur = macDur / (1 + y);
+
+  return { cashFlows, price, macDur, modDur };
+}
+
+// --- Layout: solve for the largest square side L that fits horizontally ---
+function computeLayout(cssW, maxT) {
+  const padL = 42;
+  // First pass: assume right padding is driven by half a square
+  let L = Math.min(SQUARE_CAP, 0.85 * (cssW - padL - 10) / (maxT + 0.425));
+  let padR = Math.max(62, L / 2 + 14);
+  let W = cssW - padL - padR;
+  // Second pass: refine so adjacent squares never touch
+  L = Math.min(L, 0.85 * W / maxT);
+  padR = Math.max(62, L / 2 + 14);
+  W = cssW - padL - padR;
+  return { padL, padR, W, L };
+}
+
+function fmt(v) { return v % 1 === 0 ? v.toFixed(0) : v.toFixed(1); }
+
+// --- Drawing ---
+function drawBond(canvas, ctx, bondData, color, maxT, globalMaxCF) {
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.parentElement.clientWidth - 48;
+
+  const { padL, padR, W, L } = computeLayout(cssW, maxT);
+
+  // Canvas height derives from the geometry, so nothing is ever clipped
+  const beamY = TOP_PAD + ABOVE_LABEL + L + BEAM_THICK / 2;
+  const cssH = Math.max(250, Math.ceil(beamY + BEAM_THICK / 2 + BELOW));
+
+  canvas.width = cssW * dpr;
+  canvas.height = cssH * dpr;
+  canvas.style.width = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const { cashFlows, price, macDur } = bondData;
+
+  const xOf = t => padL + (t / Math.max(maxT, 1)) * W;
+  const beamTop = beamY - BEAM_THICK / 2;
+
+  // Square side and circle radius share the same linear scale,
+  // so the circle is always inscribed in its square (PV <= CF)
+  const sideOf = v => L * Math.sqrt(Math.max(0, v) / globalMaxCF);
+
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  // --- Beam ---
+  const largestSide = cashFlows.length ? sideOf(Math.max(...cashFlows.map(c => c.cf))) : 0;
+  const beamX0 = xOf(0) - 4;
+  const beamX1 = Math.min(xOf(maxT) + largestSide / 2 + 8, cssW - 4);
+  ctx.fillStyle = '#d1cfc9';
+  ctx.beginPath();
+  ctx.roundRect(beamX0, beamTop, beamX1 - beamX0, BEAM_THICK, 2);
+  ctx.fill();
+
+  // --- Ticks and year labels ---
+  ctx.lineWidth = 1;
+  for (let t = 0; t <= maxT; t++) {
+    const x = xOf(t);
+    ctx.beginPath();
+    ctx.moveTo(x, beamY + BEAM_THICK / 2);
+    ctx.lineTo(x, beamY + BEAM_THICK / 2 + 7);
+    ctx.strokeStyle = '#c5c2bb';
+    ctx.stroke();
+    ctx.fillStyle = '#78797a';
+    ctx.font = `500 15px ${NUM_FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(String(t), x, beamY + BEAM_THICK / 2 + 10);
+  }
+
+  // --- Squares (cash flow) + circles (present value) ---
+  cashFlows.forEach(({ t, cf, pv }) => {
+    const x = xOf(t);
+    const s = sideOf(cf);          // square side
+    const d = sideOf(pv);          // circle diameter
+    const r = d / 2;
+    if (s < 1) return;
+
+    const sqTop = beamTop - s;
+    const cy = beamTop - r;
+
+    // Square — dashed neutral outline, faint fill (nominal cash flow)
+    ctx.save();
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = '#b5b2ab';
+    ctx.lineWidth = 1.5;
+    ctx.fillStyle = 'rgba(0,0,0,0.022)';
+    ctx.fillRect(x - s / 2, sqTop, s, s);
+    ctx.strokeRect(x - s / 2, sqTop, s, s);
+    ctx.restore();
+
+    // Circle — solid coloured (present value)
+    if (r >= 0.5) {
+      ctx.beginPath();
+      ctx.arc(x, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = color + '2E';
+      ctx.fill();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // --- Labels ---
+    const cfLabel = `CF = ${fmt(cf)}`;
+    const pvLabel = `PV = ${pv.toFixed(2)}`;
+
+    ctx.font = `500 ${LABEL_SIZE}px ${NUM_FONT}`;
+    ctx.textAlign = 'center';
+
+    const pvWidth = ctx.measureText(pvLabel).width;
+    const pvFitsInCircle = (d > LABEL_SIZE * 2.0) && (pvWidth < d * 0.86);
+
+    let cfBaseline = sqTop - 5;
+
+    if (!pvFitsInCircle) {
+      // PV sits just above the square, CF above that
+      ctx.textBaseline = 'bottom';
+      ctx.fillStyle = color;
+      ctx.fillText(pvLabel, x, sqTop - 5);
+      cfBaseline = sqTop - 5 - LINE_H;
+    }
+
+    // CF label above the square
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = '#8a8781';
+    ctx.fillText(cfLabel, x, cfBaseline);
+
+    if (pvFitsInCircle) {
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = color;
+      ctx.fillText(pvLabel, x, cy);
+    }
+  });
+
+  // --- Fulcrum ---
+  if (cashFlows.length > 0 && price > 0) {
+    const fulX = xOf(macDur);
+    const fulTop = beamY + BEAM_THICK / 2 + 1;
+    const fulH = 24, fulW = 18;
+
+    ctx.beginPath();
+    ctx.moveTo(fulX, fulTop);
+    ctx.lineTo(fulX - fulW / 2, fulTop + fulH);
+    ctx.lineTo(fulX + fulW / 2, fulTop + fulH);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    ctx.fillStyle = color;
+    ctx.font = `600 16px ${NUM_FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('D = ' + macDur.toFixed(2), fulX, fulTop + fulH + 6);
+  }
+}
+
+// --- Axis tick helper ---
+function niceTicks(lo, hi, target) {
+  const span = hi - lo;
+  if (!(span > 0)) return [lo];
+  const raw = span / target;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  let step;
+  if (norm <= 1) step = 1;
+  else if (norm <= 2) step = 2;
+  else if (norm <= 2.5) step = 2.5;
+  else if (norm <= 5) step = 5;
+  else step = 10;
+  step *= mag;
+  const ticks = [];
+  const start = Math.ceil(lo / step - 1e-9) * step;
+  for (let v = start; v <= hi + step * 1e-9; v += step) ticks.push(Math.round(v / step) * step);
+  return ticks;
+}
+
+// --- Price–yield chart ---
+function drawPriceYield(specs, showDur) {
+  // specs: [{ maturity, coupon, yield, color, label }]
+  const canvas = canvasPY, ctx = ctxPY;
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.parentElement.clientWidth - 48;
+  const cssH = 380;
+
+  canvas.width = cssW * dpr;
+  canvas.height = cssH * dpr;
+  canvas.style.width = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  const pad = { l: 68, r: 28, t: 18, b: 52 };
+  const W = cssW - pad.l - pad.r;
+  const H = cssH - pad.t - pad.b;
+
+  // Price range across the whole yield axis for every displayed bond
+  let minP = Infinity, maxP = -Infinity;
+  const curves = specs.map(s => {
+    const pts = [];
+    const N = 240;
+    for (let i = 0; i <= N; i++) {
+      const yPct = YIELD_MIN + (YIELD_MAX - YIELD_MIN) * i / N;
+      const p = bondCalc(s.maturity, s.coupon, yPct).price;
+      pts.push({ yPct, p });
+      if (p < minP) minP = p;
+      if (p > maxP) maxP = p;
+    }
+    return pts;
+  });
+
+  const padP = (maxP - minP) * 0.08 || 1;
+  let loP = minP - padP, hiP = maxP + padP;
+  const yTicks = niceTicks(loP, hiP, 6);
+  if (yTicks.length) {
+    loP = Math.min(loP, yTicks[0]);
+    hiP = Math.max(hiP, yTicks[yTicks.length - 1]);
+  }
+  const xTicks = niceTicks(YIELD_MIN, YIELD_MAX, 6);
+
+  const xOf = yPct => pad.l + (yPct - YIELD_MIN) / (YIELD_MAX - YIELD_MIN) * W;
+  const yOf = p => pad.t + H - (p - loP) / (hiP - loP) * H;
+
+  // --- Gridlines ---
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = '#eeece8';
+  yTicks.forEach(v => {
+    const y = yOf(v);
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + W, y); ctx.stroke();
+  });
+  xTicks.forEach(v => {
+    const x = xOf(v);
+    ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, pad.t + H); ctx.stroke();
+  });
+
+  // --- Axes ---
+  ctx.strokeStyle = '#c5c2bb';
+  ctx.beginPath();
+  ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, pad.t + H); ctx.lineTo(pad.l + W, pad.t + H);
+  ctx.stroke();
+
+  // Tick labels
+  ctx.fillStyle = '#78797a';
+  ctx.font = `500 13px ${NUM_FONT}`;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  yTicks.forEach(v => ctx.fillText(v.toFixed(hiP - loP < 12 ? 1 : 0), pad.l - 9, yOf(v)));
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  xTicks.forEach(v => ctx.fillText(String(v), xOf(v), pad.t + H + 9));
+
+  // Axis titles
+  ctx.fillStyle = '#8a8781';
+  ctx.font = `500 13px ${NUM_FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('Yield (%)', pad.l + W / 2, cssH - 6);
+  ctx.save();
+  ctx.translate(16, pad.t + H / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textBaseline = 'top';
+  ctx.fillText('Price ($)', 0, 0);
+  ctx.restore();
+
+  // --- Curves ---
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(pad.l, pad.t, W, H);
+  ctx.clip();
+
+  curves.forEach((pts, i) => {
+    ctx.beginPath();
+    pts.forEach((pt, j) => {
+      const x = xOf(pt.yPct), y = yOf(pt.p);
+      if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = specs[i].color;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+  });
+
+  // --- Tangent lines ---
+  if (showDur) {
+    specs.forEach(s => {
+      const b = bondCalc(s.maturity, s.coupon, s.yield);
+      const P0 = b.price;
+      // dP/dy = -D_mod * P  (y in decimals) -> per percentage point, divide by 100
+      const slopePerPct = -b.modDur * P0 / 100;
+      const x0 = s.yield;
+      const tanAt = xp => P0 + slopePerPct * (xp - x0);
+
+      ctx.save();
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = s.color;
+      ctx.globalAlpha = 0.75;
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      ctx.moveTo(xOf(YIELD_MIN), yOf(tanAt(YIELD_MIN)));
+      ctx.lineTo(xOf(YIELD_MAX), yOf(tanAt(YIELD_MAX)));
+      ctx.stroke();
+      ctx.restore();
+    });
+  }
+  ctx.restore();
+
+  // --- Current-point dots ---
+  const marks = specs.map(s => {
+    const b = bondCalc(s.maturity, s.coupon, s.yield);
+    return { s, b, P0: b.price, px: xOf(s.yield), py: yOf(b.price) };
+  });
+
+  marks.forEach(m => {
+    ctx.beginPath();
+    ctx.arc(m.px, m.py, 5.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+    ctx.strokeStyle = m.s.color;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+  });
+
+  if (!showDur) return;
+
+  // --- Duration annotations ---
+  // Drawn last so they sit above the curves. The higher dot takes its label
+  // above; the lower dot takes its label below, which pushes the two apart.
+  const ordered = marks.slice().sort((a, b) => b.P0 - a.P0);
+
+  ordered.forEach((m, idx) => {
+    const above = (ordered.length === 1) ? true : (idx === 0);
+
+    const slopePerY = -m.b.modDur * m.P0;   // dP/dy, y in decimals
+    const l1 = `slope = dP/dy = ${slopePerY.toFixed(1)}`;
+    const l2 = `D_mod = \u2212slope / P = ${m.b.modDur.toFixed(2)}`;
+
+    ctx.font = `500 11.5px ${NUM_FONT}`;
+    const lh = 14, padX = 7, padY = 5, gap = 12;
+    const tw = Math.max(ctx.measureText(l1).width, ctx.measureText(l2).width);
+    const bw = tw + padX * 2, bh = lh * 2 + padY * 2;
+
+    // Centre the box on the dot, then keep it inside the plot area
+    let bx = m.px - bw / 2;
+    bx = Math.max(pad.l + 2, Math.min(bx, pad.l + W - bw - 2));
+    let by = above ? m.py - gap - bh : m.py + gap;
+    by = Math.max(pad.t + 2, Math.min(by, pad.t + H - bh - 2));
+
+    // Opaque backing keeps the text readable wherever it lands
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, bh, 5);
+    ctx.fillStyle = 'rgba(255,255,255,0.94)';
+    ctx.fill();
+    ctx.globalAlpha = 0.4;
+    ctx.strokeStyle = m.s.color;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.fillStyle = m.s.color;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(l1, bx + padX, by + padY);
+    ctx.fillText(l2, bx + padX, by + padY + lh);
+  });
+}
+
+// --- Update ---
+function update() {
+  const showB = el.toggleB.checked;
+
+  const matA = parseInt(el.matA.value);
+  const cpnA = parseFloat(el.cpnA.value);
+  const yldA = parseFloat(el.yldA.value);
+  const matB = parseInt(el.matB.value);
+  const cpnB = parseFloat(el.cpnB.value);
+  const yldB = parseFloat(el.yldB.value);
+
+  el.matAd.textContent = matA;
+  el.cpnAd.textContent = cpnA.toFixed(1);
+  el.yldAd.textContent = yldA.toFixed(1);
+  el.matBd.textContent = matB;
+  el.cpnBd.textContent = cpnB.toFixed(1);
+  el.yldBd.textContent = yldB.toFixed(1);
+
+  const bondA = bondCalc(matA, cpnA, yldA);
+  const bondB = bondCalc(matB, cpnB, yldB);
+
+  const maxT = showB ? Math.max(matA, matB) : matA;
+  const maxCF_A = Math.max(...bondA.cashFlows.map(c => c.cf));
+  const maxCF_B = Math.max(...bondB.cashFlows.map(c => c.cf));
+  const globalMaxCF = showB ? Math.max(maxCF_A, maxCF_B, 1) : Math.max(maxCF_A, 1);
+
+  // Only draw visible canvases — a hidden panel reports zero width
+  if (el.showTimelines.checked) {
+    drawBond(canvasA, ctxA, bondA, '#0072B2', maxT, globalMaxCF);
+    if (showB) drawBond(canvasB, ctxB, bondB, '#E69F00', maxT, globalMaxCF);
+  }
+
+  el.priceA.textContent = '$' + bondA.price.toFixed(2);
+  el.macA.textContent = bondA.macDur.toFixed(2);
+  el.modA.textContent = bondA.modDur.toFixed(2);
+
+  el.priceB.textContent = '$' + bondB.price.toFixed(2);
+  el.macB.textContent = bondB.macDur.toFixed(2);
+  el.modB.textContent = bondB.modDur.toFixed(2);
+
+  // Price–yield chart
+  const showDur = el.toggleDur.checked;
+  if (el.showPY.checked) {
+    const specs = [{ maturity: matA, coupon: cpnA, yield: yldA, color: '#0072B2' }];
+    if (showB) specs.push({ maturity: matB, coupon: cpnB, yield: yldB, color: '#E69F00' });
+    drawPriceYield(specs, showDur);
+  }
+
+  el.pyLegendB.classList.toggle('hidden', !showB);
+  el.pyLegendTan.classList.toggle('hidden', !showDur);
+}
+
+function applyToggle() {
+  const showB = el.toggleB.checked;
+  el.bondBSection.classList.toggle('hidden', !showB);
+  el.readoutB.classList.toggle('hidden', !showB);
+  el.readoutsRow.classList.toggle('single', !showB);
+  update();
+}
+
+function applyDisplay() {
+  const t = el.showTimelines.checked;
+  el.chartPanelA.classList.toggle('hidden', !t);
+  el.chartPanelB.classList.toggle('hidden', !t);
+  el.readoutsRow.classList.toggle('hidden', !el.showReadouts.checked);
+  el.pyPanel.classList.toggle('hidden', !el.showPY.checked);
+  update();
+}
+
+['matA','cpnA','yldA','matB','cpnB','yldB'].forEach(id => {
+  $(id).addEventListener('input', update);
+});
+
+el.toggleB.addEventListener('change', applyToggle);
+el.toggleDur.addEventListener('change', update);
+['showTimelines','showReadouts','showPY'].forEach(id => {
+  $(id).addEventListener('change', applyDisplay);
+});
+
+$('resetBtn').addEventListener('click', () => {
+  el.matA.value = 5;  el.cpnA.value = 7;  el.yldA.value = 4;
+  el.matB.value = 4;  el.cpnB.value = 3;  el.yldB.value = 5;
+  el.toggleB.checked = false;
+  el.toggleDur.checked = false;
+  el.showTimelines.checked = true;
+  el.showReadouts.checked = true;
+  el.showPY.checked = true;
+  el.bondBSection.classList.add('hidden');
+  el.readoutB.classList.add('hidden');
+  el.readoutsRow.classList.add('single');
+  applyDisplay();
+});
+
+let rt;
+window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(update, 80); });
+
+el.toggleB.checked = false;
+el.toggleDur.checked = false;
+applyToggle();
+applyDisplay();
+</script>
+</body>
+</html>
