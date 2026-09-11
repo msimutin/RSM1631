@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Financial Calculator: RSM 1631</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --color-a: #0072B2; --color-b: #E69F00; --color-c: #E50077;
+    --bg: #faf9f7; --panel-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b7280;
+    --border: #e5e2dd; --accent: #1a1a1a; --input-bg: #f5f4f2;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  }
+  body { font-family: 'Source Serif 4', Georgia, serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 2rem 1.5rem; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.6rem; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 0.25rem; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--text-muted);
+    display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;
+  }
+  .section-label .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  .panel {
+    background: var(--panel-bg); border: 1px solid var(--border); border-radius: 12px;
+    padding: 1.25rem 1.5rem; box-shadow: var(--shadow); margin-bottom: 1rem;
+  }
+
+  /* ---- solve-for segmented control ---- */
+  .solve-row { display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap; }
+  .segmented { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .seg-btn {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; font-weight: 500;
+    padding: 0.5rem 1.05rem; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--input-bg); color: var(--text-muted); cursor: pointer;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .seg-btn:hover { border-color: var(--color-c); color: var(--text); }
+  .seg-btn.active {
+    background: var(--color-c); border-color: var(--color-c); color: #fff; font-weight: 600;
+    box-shadow: 0 1px 5px rgba(229,0,119,0.3);
+  }
+  .seg-btn .sub { display: block; font-size: 0.64rem; letter-spacing: 0.05em; opacity: 0.75; font-weight: 400; margin-top: 1px; }
+
+  /* ---- inputs ---- */
+  .input-grid {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.9rem;
+  }
+  @media (max-width: 880px) { .input-grid { grid-template-columns: repeat(2, 1fr); } }
+  .field label {
+    display: block; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+    font-weight: 500; color: var(--text-muted); letter-spacing: 0.04em; margin-bottom: 0.3rem;
+  }
+  .field label .sym { color: var(--text); font-weight: 600; }
+  .field input {
+    width: 100%; font-family: 'Source Serif 4', Georgia, serif; font-size: 1.02rem;
+    padding: 0.5rem 0.6rem; border: 1px solid var(--border); border-radius: 7px;
+    background: var(--input-bg); color: var(--text); outline: none; transition: border-color 0.15s;
+  }
+  .field input:focus { border-color: var(--color-a); background: #fff; }
+  .field.solving label .sym, .field.solving label { color: var(--color-c); }
+  .field.solving input {
+    background: rgba(229,0,119,0.06); border-color: var(--color-c); border-width: 1.5px;
+    color: var(--color-c); font-weight: 600; cursor: not-allowed;
+  }
+  .field .hint { font-family: 'JetBrains Mono', monospace; font-size: 0.64rem; color: var(--text-muted); margin-top: 0.25rem; }
+
+  .options-row {
+    display: flex; align-items: flex-end; gap: 1.5rem; flex-wrap: wrap;
+    margin-top: 1.1rem; padding-top: 1.1rem; border-top: 1px solid var(--border);
+  }
+  .field select {
+    font-family: 'Source Serif 4', Georgia, serif; font-size: 0.95rem;
+    padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: 7px;
+    background: var(--input-bg); color: var(--text); outline: none; cursor: pointer;
+  }
+  .mini-seg { display: flex; gap: 0.3rem; }
+  .mini-btn {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.74rem;
+    padding: 0.42rem 0.7rem; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--input-bg); color: var(--text-muted); cursor: pointer; transition: all 0.15s;
+  }
+  .mini-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .convention {
+    font-size: 0.82rem; color: var(--text-muted); margin-top: 0.9rem;
+    padding-top: 0.8rem; border-top: 1px solid var(--border); line-height: 1.5;
+  }
+  .convention b { color: var(--text); font-weight: 600; }
+
+  /* ---- answer ---- */
+  .answer-panel { border-color: var(--color-c); border-width: 1.5px; }
+  .answer-flex { display: flex; align-items: baseline; gap: 1.5rem; flex-wrap: wrap; }
+  .answer-main { flex: 1; min-width: 260px; }
+  .answer-value {
+    font-family: 'Source Serif 4', Georgia, serif; font-size: 2.3rem; font-weight: 600;
+    color: var(--color-c); letter-spacing: -0.02em; line-height: 1.1;
+  }
+  .answer-value.error { font-size: 1.05rem; color: var(--text-muted); font-weight: 400; font-style: italic; }
+  .answer-note { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.35rem; }
+  .derived { display: flex; gap: 1.8rem; flex-wrap: wrap; }
+  .derived-item .dl {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--text-muted);
+    letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .derived-item .dv { font-size: 1.02rem; font-weight: 500; margin-top: 0.1rem; }
+
+  /* ---- formula ---- */
+  .formula-line {
+    font-size: 1.05rem; line-height: 2.1; margin: 0.5rem 0;
+    overflow-x: auto; white-space: nowrap; padding-bottom: 0.2rem;
+  }
+  .formula-line.sub { color: var(--text-muted); font-size: 0.98rem; }
+  .frac { display: inline-block; vertical-align: middle; text-align: center; margin: 0 0.25em; }
+  .frac .num { display: block; padding: 0 0.35em 1px; border-bottom: 1px solid currentColor; }
+  .frac .den { display: block; padding: 1px 0.35em 0; }
+  sup { font-size: 0.72em; }
+  .hl { color: var(--color-c); font-weight: 600; }
+  .units-line {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--text-muted);
+    background: var(--input-bg); border-radius: 7px; padding: 0.6rem 0.8rem; margin-top: 0.8rem;
+    line-height: 1.7;
+  }
+  .units-line b { color: var(--text); }
+  .note-small { font-size: 0.83rem; color: var(--text-muted); margin-top: 0.75rem; line-height: 1.5; font-style: italic; }
+
+  /* ---- code panels ---- */
+  .code-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 880px) { .code-cols { grid-template-columns: 1fr; } }
+  .code-block {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.79rem; line-height: 1.75;
+    background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 0.8rem 0.9rem; margin-top: 0.7rem; white-space: pre-wrap; word-break: break-word;
+    color: var(--text);
+  }
+  .code-block .cmt { color: var(--text-muted); }
+  .code-block .key { color: var(--color-a); font-weight: 600; }
+  .code-block .out { color: var(--color-c); font-weight: 600; }
+
+  /* ---- timeline ---- */
+  canvas { width: 100%; display: block; }
+  .chart-legend {
+    display: flex; gap: 1.4rem; align-items: center; flex-wrap: wrap;
+    margin-top: 0.9rem; padding-top: 0.8rem; border-top: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text-muted);
+  }
+  .legend-item { display: flex; align-items: center; gap: 0.45rem; }
+  .legend-bar { width: 14px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+
+  .preset-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .preset-btn {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.74rem;
+    padding: 0.35rem 0.75rem; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--panel-bg); color: var(--text-muted); cursor: pointer; transition: all 0.15s;
+  }
+  .preset-btn:hover { border-color: var(--color-a); color: var(--color-a); }
+
+  .reset-btn {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
+    padding: 0.35rem 0.85rem; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--input-bg); color: var(--text-muted); cursor: pointer;
+    transition: background 0.15s, color 0.15s; white-space: nowrap; margin-top: 1rem;
+  }
+  .reset-btn:hover { background: var(--accent); color: #fff; }
+  .footer-row { display: flex; justify-content: flex-end; margin-top: 0.25rem; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Financial Calculator: RSM 1631</h1>
+  <p class="subtitle">Pick what you are solving for, fill in the rest, and see the formula, the Excel version, the calculator keystrokes, and the cash flows behind the answer</p>
+
+  <!-- SOLVE FOR -->
+  <div class="panel">
+    <div class="solve-row">
+      <div class="section-label"><span class="dot" style="background:var(--color-c)"></span> Solve for</div>
+      <div class="segmented" id="segSolve">
+        <button class="seg-btn" data-t="PV">PV<span class="sub">present value</span></button>
+        <button class="seg-btn" data-t="FV">FV<span class="sub">future value</span></button>
+        <button class="seg-btn" data-t="RATE">R<span class="sub">interest rate</span></button>
+        <button class="seg-btn" data-t="PMT">PMT<span class="sub">payment</span></button>
+        <button class="seg-btn" data-t="N">T<span class="sub">no. of years</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="preset-row">
+    <span class="section-label" style="font-size:0.72rem">Examples</span>
+    <button class="preset-btn" data-p="lump">Single sum</button>
+    <button class="preset-btn" data-p="mortgage">Mortgage payment</button>
+    <button class="preset-btn" data-p="afford">How much can I borrow</button>
+    <button class="preset-btn" data-p="retire">Retirement savings</button>
+    <button class="preset-btn" data-p="carrate">Rate on a car loan</button>
+  </div>
+
+  <!-- INPUTS -->
+  <div class="panel">
+    <div class="section-label" style="margin-bottom:0.9rem"><span class="dot" style="background:var(--color-a)"></span> Inputs</div>
+    <div class="input-grid">
+      <div class="field" id="f-N">
+        <label><span class="sym">T</span> &nbsp;Number of years</label>
+        <input type="number" id="in-N" step="any" value="10">
+        <div class="hint" id="hint-N">= 10 periods</div>
+      </div>
+      <div class="field" id="f-RATE">
+        <label><span class="sym">R</span> &nbsp;Annual rate (%)</label>
+        <input type="number" id="in-RATE" step="any" value="6">
+        <div class="hint" id="hint-RATE">nominal, quoted</div>
+      </div>
+      <div class="field" id="f-PV">
+        <label><span class="sym">PV</span> &nbsp;Present value</label>
+        <input type="number" id="in-PV" step="any" value="-1000">
+        <div class="hint">amount today</div>
+      </div>
+      <div class="field" id="f-PMT">
+        <label><span class="sym">PMT</span> &nbsp;Payment</label>
+        <input type="number" id="in-PMT" step="any" value="0">
+        <div class="hint" id="hint-PMT">each period</div>
+      </div>
+      <div class="field" id="f-FV">
+        <label><span class="sym">FV</span> &nbsp;Future value</label>
+        <input type="number" id="in-FV" step="any" value="0">
+        <div class="hint">amount at the end</div>
+      </div>
+    </div>
+
+    <div class="options-row">
+      <div class="field">
+        <label>Compounding &amp; payments per year</label>
+        <select id="in-M">
+          <option value="1">Annual &mdash; 1 / year</option>
+          <option value="2">Semi-annual &mdash; 2 / year</option>
+          <option value="4">Quarterly &mdash; 4 / year</option>
+          <option value="12">Monthly &mdash; 12 / year</option>
+          <option value="52">Weekly &mdash; 52 / year</option>
+          <option value="365">Daily &mdash; 365 / year</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Payments occur at the</label>
+        <div class="mini-seg" id="segType">
+          <button class="mini-btn active" data-type="0">End of period</button>
+          <button class="mini-btn" data-type="1">Beginning</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="convention">
+      <b>Sign convention.</b> Enter money you receive as a positive number.
+      Enter money you pay out as a negative number.
+    </div>
+  </div>
+
+  <!-- ANSWER -->
+  <div class="panel answer-panel">
+    <div class="section-label" style="margin-bottom:0.7rem"><span class="dot" style="background:var(--color-c)"></span> <span id="ansTitle">Future value</span></div>
+    <div class="answer-flex">
+      <div class="answer-main">
+        <div class="answer-value" id="ansValue">&mdash;</div>
+        <div class="answer-note" id="ansNote"></div>
+      </div>
+      <div class="derived">
+        <div class="derived-item"><div class="dl">Rate per period <i>r</i></div><div class="dv" id="dv-i">&mdash;</div></div>
+        <div class="derived-item"><div class="dl">Periods <i>N</i></div><div class="dv" id="dv-n">&mdash;</div></div>
+        <div class="derived-item"><div class="dl">Effective annual rate</div><div class="dv" id="dv-ear">&mdash;</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FORMULA -->
+  <div class="panel">
+    <div class="section-label" style="margin-bottom:0.4rem"><span class="dot" style="background:var(--accent)"></span> The formula</div>
+    <div class="formula-line" id="formulaSym"></div>
+    <div class="formula-line sub" id="formulaNum"></div>
+    <div class="units-line" id="unitsLine"></div>
+    <div class="note-small" id="formulaNote"></div>
+  </div>
+
+  <!-- CODE -->
+  <div class="code-cols">
+    <div class="panel" style="margin-bottom:0">
+      <div class="section-label"><span class="dot" style="background:var(--color-a)"></span> In Excel</div>
+      <div class="code-block" id="excelBlock"></div>
+    </div>
+    <div class="panel" style="margin-bottom:0">
+      <div class="section-label"><span class="dot" style="background:var(--color-b)"></span> On an HP 10bii calculator</div>
+      <div class="code-block" id="hpBlock"></div>
+    </div>
+  </div>
+
+  <!-- TIMELINE -->
+  <div class="panel" style="margin-top:1rem">
+    <div class="section-label" style="margin-bottom:0.8rem"><span class="dot" style="background:var(--color-b)"></span> Timeline of cash flows</div>
+    <canvas id="tl" width="1040" height="280"></canvas>
+    <div class="chart-legend" id="tlLegend">
+      <div class="legend-item" id="lg-lump"><span class="legend-bar" style="background:var(--color-a)"></span> Lump sum (PV, FV)</div>
+      <div class="legend-item" id="lg-pmt"><span class="legend-bar" style="background:var(--color-b)"></span> Payment (PMT)</div>
+      <div class="legend-item" id="lg-solve"><span class="legend-bar" style="background:var(--color-c)"></span> What you are solving for</div>
+      <div class="legend-item">Arrows up = money in. Arrows down = money out</div>
+    </div>
+  </div>
+
+  <div class="footer-row"><button class="reset-btn" id="resetBtn">Reset</button></div>
+</div>
+
+<script>
+/* ===== TVM core =========================================================
+   Canonical cash-flow equation (same one Excel and the HP 10bii use):
+       PV(1+i)^N  +  PMT(1 + i*type)*[(1+i)^N - 1]/i  +  FV  =  0
+   ===================================================================== */
+function growth(i, n) { return Math.pow(1 + i, n); }
+
+function pmtFactor(i, n, type) {
+  if (Math.abs(i) < 1e-12) return n;
+  return (1 + i * type) * (growth(i, n) - 1) / i;
+}
+function residual(i, n, pv, pmt, fv, type) {
+  return pv * growth(i, n) + pmt * pmtFactor(i, n, type) + fv;
+}
+function solvePV(i, n, pmt, fv, type) {
+  return -(fv + pmt * pmtFactor(i, n, type)) / growth(i, n);
+}
+function solveFV(i, n, pv, pmt, type) {
+  return -(pv * growth(i, n) + pmt * pmtFactor(i, n, type));
+}
+function solvePMT(i, n, pv, fv, type) {
+  const b = pmtFactor(i, n, type);
+  if (Math.abs(b) < 1e-12) return null;
+  return -(pv * growth(i, n) + fv) / b;
+}
+function solveN(i, pv, pmt, fv, type) {
+  if (Math.abs(i) < 1e-12) {
+    if (Math.abs(pmt) < 1e-12) return null;
+    const n = -(pv + fv) / pmt;
+    return n > 0 ? n : null;
+  }
+  if (Math.abs(pmt) < 1e-12) {
+    if (pv === 0 || -fv / pv <= 0) return null;
+    const n = Math.log(-fv / pv) / Math.log(1 + i);
+    return n > 0 ? n : null;
+  }
+  const k = pmt * (1 + i * type) / i;
+  const denom = pv + k;
+  if (Math.abs(denom) < 1e-12) return null;
+  const ratio = (k - fv) / denom;
+  if (ratio <= 0) return null;
+  const n = Math.log(ratio) / Math.log(1 + i);
+  return (isFinite(n) && n > 0) ? n : null;
+}
+function solveI(n, pv, pmt, fv, type) {
+  const f = (i) => residual(i, n, pv, pmt, fv, type);
+  const lo0 = -0.9999, hi0 = 10, steps = 4000;
+  let prevX = lo0, prevY = f(lo0);
+  const roots = [];
+  for (let s = 1; s <= steps; s++) {
+    const x = lo0 + (hi0 - lo0) * s / steps;
+    const y = f(x);
+    if (isFinite(prevY) && isFinite(y) && prevY * y < 0) {
+      let a = prevX, b = x;
+      for (let k = 0; k < 200; k++) {
+        const mid = (a + b) / 2;
+        if (f(a) * f(mid) <= 0) b = mid; else a = mid;
+      }
+      roots.push((a + b) / 2);
+    }
+    prevX = x; prevY = y;
+  }
+  if (!roots.length) return null;
+  const nonNeg = roots.filter(r => r > -1e-9);
+  return nonNeg.length ? Math.min.apply(null, nonNeg)
+                       : roots.reduce((a, b) => Math.abs(a) < Math.abs(b) ? a : b);
+}
+function earOf(i, m) { return Math.pow(1 + i, m) - 1; }
+
+/* ===== state ========================================================== */
+const DEFAULTS = { target: 'FV', N: 10, RATE: 6, PV: -1000, PMT: 0, FV: 0, M: 1, type: 0 };
+let S = Object.assign({}, DEFAULTS);
+
+const PRESETS = {
+  lump:     { target: 'FV',   N: 10, RATE: 6,    PV: -1000,   PMT: 0,    FV: 0,      M: 1,  type: 0 },
+  mortgage: { target: 'PMT',  N: 25, RATE: 4.29, PV: 450000, PMT: 0,    FV: 0,      M: 12, type: 0 },
+  afford:   { target: 'PV',   N: 25, RATE: 4.29, PV: 0,      PMT: -3000, FV: 0,     M: 12, type: 0 },
+  retire:   { target: 'FV',   N: 35, RATE: 6.2,  PV: 0,       PMT: -950, FV: 0,      M: 12, type: 0 },
+  carrate:  { target: 'RATE', N: 5,  RATE: 0,    PV: 24000,   PMT: -480, FV: 0,      M: 12, type: 0 }
+};
+
+const FREQ_WORD = { 1: 'year', 2: 'half-year', 4: 'quarter', 12: 'month', 26: 'two weeks', 52: 'week', 365: 'day' };
+const FREQ_ADJ  = { 1: 'annual', 2: 'semi-annual', 4: 'quarterly', 12: 'monthly', 26: 'bi-weekly', 52: 'weekly', 365: 'daily' };
+
+/* ===== formatting ===================================================== */
+function money(x) {
+  if (x === null || !isFinite(x)) return '—';
+  return (x < 0 ? '\u2212$' : '$') + Math.abs(x).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function moneyShort(x) {
+  const a = Math.abs(x);
+  const s = a >= 1000 ? a.toLocaleString('en-US', { maximumFractionDigits: 0 })
+                      : a.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (x < 0 ? '\u2212' : '') + '$' + s;
+}
+function pct(x, d) { return (x * 100).toFixed(d === undefined ? 3 : d) + '%'; }
+function num(x, d) { return x.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }); }
+function sig(x) {
+  if (Math.abs(x) >= 1000) return x.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return parseFloat(x.toPrecision(6)).toString();
+}
+// no separators: used anywhere the string must be pasted into Excel or typed on a keypad
+function raw(x) { return parseFloat(Number(x).toPrecision(12)).toString(); }
+
+/* ===== compute ======================================================== */
+function compute() {
+  const m = S.M;
+  const t = S.type;
+  const out = { m: m, type: t, ok: false, msg: '' };
+
+  const iKnown = S.RATE / 100 / m;
+  const nKnown = S.N * m;
+
+  if (S.target !== 'N' && !(nKnown > 0)) { out.msg = 'The number of years must be greater than zero.'; return out; }
+
+  if (S.target === 'PV') {
+    out.i = iKnown; out.n = nKnown;
+    out.value = solvePV(out.i, out.n, S.PMT, S.FV, t);
+  } else if (S.target === 'FV') {
+    out.i = iKnown; out.n = nKnown;
+    out.value = solveFV(out.i, out.n, S.PV, S.PMT, t);
+  } else if (S.target === 'PMT') {
+    out.i = iKnown; out.n = nKnown;
+    out.value = solvePMT(out.i, out.n, S.PV, S.FV, t);
+    if (out.value === null) out.msg = 'With these inputs there is no payment to solve for.';
+  } else if (S.target === 'RATE') {
+    out.n = nKnown;
+    const per = solveI(out.n, S.PV, S.PMT, S.FV, t);
+    if (per === null) {
+      out.msg = 'No rate solves this. Check the signs \u2014 the cash you put in and the cash you take out must have opposite signs.';
+    } else { out.i = per; out.value = per * m * 100; }
+  } else if (S.target === 'N') {
+    out.i = iKnown;
+    const n = solveN(out.i, S.PV, S.PMT, S.FV, t);
+    if (n === null) {
+      out.msg = 'No number of periods solves this. Check the signs, and make sure the target is actually reachable.';
+    } else { out.n = n; out.value = n / m; }
+  }
+
+  if (!out.msg && (out.value === null || !isFinite(out.value))) out.msg = 'These inputs do not have a solution.';
+  out.ok = !out.msg;
+  return out;
+}
+
+/* ===== formula rendering ============================================== */
+function frac(n, d) { return '<span class="frac"><span class="num">' + n + '</span><span class="den">' + d + '</span></span>'; }
+function due(t) { return t === 1 ? ' \u00d7 (1+<i>r</i>)' : ''; }
+function dueN(t, r) { return t === 1 ? ' \u00d7 ' + num(1 + r, 6) : ''; }
+function term(x) {
+  const t = sig(Math.abs(x));
+  return (x < 0) ? '(\u2212' + t + ')' : t;
+}
+function wrapTerms(terms) {
+  if (!terms.length) return '0';
+  if (terms.length === 1) return terms[0];
+  return '[ ' + terms.join(' &nbsp;+&nbsp; ') + ' ]';
+}
+
+function nLabel(res) {
+  if (res.m === 1) return '<span class="hl">' + num(res.value, 2) + '</span> years';
+  return '<span class="hl">' + num(res.n, 2) + '</span> ' + FREQ_WORD[res.m] + 's = <span class="hl">'
+       + num(res.value, 2) + '</span> years';
+}
+function renderFormula(res) {
+  const t = S.type;
+  const rS = '<i>r</i>', nS = '<i>N</i>';
+  let sym = '', numeric = '', note = '';
+
+  const nzPV  = Math.abs(S.PV)  > 1e-12;
+  const nzFV  = Math.abs(S.FV)  > 1e-12;
+  const nzPMT = Math.abs(S.PMT) > 1e-12;
+
+  const annPV = frac('1 \u2212 (1+' + rS + ')<sup>\u2212' + nS + '</sup>', rS);
+  const annFV = frac('(1+' + rS + ')<sup>' + nS + '</sup> \u2212 1', rS);
+  const gN = res.ok ? num(growth(res.i, res.n), 6) : '';
+  const rN = res.ok ? num(res.i, 6) : '';
+  const nN = res.ok ? num(res.n, 0) : '';
+  const annPVn = res.ok ? frac('1 \u2212 (1+' + rN + ')<sup>\u2212' + nN + '</sup>', rN) : '';
+  const annFVn = res.ok ? frac('(1+' + rN + ')<sup>' + nN + '</sup> \u2212 1', rN) : '';
+
+  if (S.target === 'PV') {
+    const a = [], b = [];
+    if (nzFV)  { a.push(frac('FV', '(1+' + rS + ')<sup>' + nS + '</sup>'));
+                 if (res.ok) b.push(frac(term(S.FV), gN)); }
+    if (nzPMT) { a.push('PMT \u00d7 ' + annPV + due(t));
+                 if (res.ok) b.push(term(S.PMT) + ' \u00d7 ' + annPVn + dueN(t, res.i)); }
+    sym = '<span class="hl">PV</span> = \u2212 ' + wrapTerms(a);
+    if (res.ok) numeric = '= \u2212 ' + wrapTerms(b) + ' = <span class="hl">' + money(res.value) + '</span>';
+
+  } else if (S.target === 'FV') {
+    const a = [], b = [];
+    if (nzPV)  { a.push('PV \u00d7 (1+' + rS + ')<sup>' + nS + '</sup>');
+                 if (res.ok) b.push(term(S.PV) + ' \u00d7 ' + gN); }
+    if (nzPMT) { a.push('PMT \u00d7 ' + annFV + due(t));
+                 if (res.ok) b.push(term(S.PMT) + ' \u00d7 ' + annFVn + dueN(t, res.i)); }
+    sym = '<span class="hl">FV</span> = \u2212 ' + wrapTerms(a);
+    if (res.ok) numeric = '= \u2212 ' + wrapTerms(b) + ' = <span class="hl">' + money(res.value) + '</span>';
+
+  } else if (S.target === 'PMT') {
+    const a = [], b = [];
+    if (nzPV) { a.push('PV \u00d7 (1+' + rS + ')<sup>' + nS + '</sup>');
+                if (res.ok) b.push(term(S.PV) + ' \u00d7 ' + gN); }
+    if (nzFV) { a.push('FV'); if (res.ok) b.push(term(S.FV)); }
+    const topS = (a.length > 1 ? '( ' + a.join(' + ') + ' )' : (a.length ? a[0] : '0')) + ' \u00d7 ' + rS;
+    const divS = t === 1 ? ' \u00f7 (1+' + rS + ')' : '';
+    sym = '<span class="hl">PMT</span> = \u2212 ' + frac(topS, '(1+' + rS + ')<sup>' + nS + '</sup> \u2212 1') + divS;
+    if (res.ok) {
+      const topN = (b.length > 1 ? '( ' + b.join(' + ') + ' )' : (b.length ? b[0] : '0')) + ' \u00d7 ' + rN;
+      const divN = t === 1 ? ' \u00f7 ' + num(1 + res.i, 6) : '';
+      numeric = '= \u2212 ' + frac(topN, '(1+' + rN + ')<sup>' + nN + '</sup> \u2212 1') + divN
+              + ' = <span class="hl">' + money(res.value) + '</span>';
+    }
+
+  } else if (S.target === 'RATE') {
+    const a = [], b = [];
+    if (nzPV)  { a.push('PV \u00d7 (1+' + rS + ')<sup>' + nS + '</sup>');
+                 b.push(term(S.PV) + ' \u00d7 (1+<i>r</i>)<sup>' + num(res.n, 0) + '</sup>'); }
+    if (nzPMT) { a.push('PMT \u00d7 ' + annFV + due(t));
+                 b.push(term(S.PMT) + ' \u00d7 ' + frac('(1+<i>r</i>)<sup>' + num(res.n, 0) + '</sup> \u2212 1', '<i>r</i>')
+                        + (res.ok ? dueN(t, res.i) : '')); }
+    if (nzFV)  { a.push('FV'); b.push(term(S.FV)); }
+    sym = 'Find <span class="hl"><i>r</i></span> such that &nbsp; ' + a.join(' &nbsp;+&nbsp; ') + ' = 0';
+    if (res.ok) numeric = b.join(' &nbsp;+&nbsp; ') + ' = 0 &nbsp;\u27f9&nbsp; <i>r</i> = <span class="hl">'
+                        + pct(res.i, 4) + '</span> per ' + FREQ_WORD[res.m];
+    note = 'There is no closed-form solution for the rate. Excel and your calculator both find it by iteration \u2014 guessing, checking, and improving the guess \u2014 which is exactly what an IRR calculation does.';
+
+  } else if (S.target === 'N') {
+    if (!nzPMT) {
+      sym = '<span class="hl"><i>N</i></span> = ' + frac('ln ( \u2212FV \u00f7 PV )', 'ln (1+' + rS + ')');
+      if (res.ok) numeric = '= ' + frac('ln ( ' + term(-S.FV) + ' \u00f7 ' + term(S.PV) + ' )', 'ln (1+' + num(res.i, 6) + ')')
+                          + ' = ' + nLabel(res);
+    } else {
+      const kS = 'PMT(1+' + rS + '\u00b7type)\u00f7' + rS;
+      sym = '<span class="hl"><i>N</i></span> = ' + frac('ln [ (' + kS + (nzFV ? ' \u2212 FV' : '') + ') \u00f7 ('
+            + (nzPV ? 'PV + ' : '') + kS + ') ]', 'ln (1+' + rS + ')');
+      if (res.ok) numeric = '\u27f9 <i>N</i> = ' + nLabel(res);
+    }
+    note = 'This is the one case that genuinely needs logarithms, which is why in practice everyone lets Excel or the calculator do it.';
+  }
+
+  document.getElementById('formulaSym').innerHTML = sym;
+  document.getElementById('formulaNum').innerHTML = numeric;
+  document.getElementById('formulaNote').innerHTML = note;
+
+  const m = S.M;
+  let u = '';
+  if (S.target === 'RATE') {
+    u = '<b>N</b> = ' + sig(S.N) + ' years \u00d7 ' + m + ' = <b>' + num(res.n || 0, 0) + ' periods</b>'
+      + (res.ok ? ' &nbsp;&nbsp;\u00b7&nbsp;&nbsp; <b>r</b> = ' + pct(res.i, 4) + ' per ' + FREQ_WORD[m]
+              + ' &nbsp;\u2192&nbsp; annual rate = ' + pct(res.i, 4) + ' \u00d7 ' + m + ' = <b>' + num(res.value, 3) + '%</b>' : '');
+  } else if (S.target === 'N') {
+    u = '<b>r</b> = ' + sig(S.RATE) + '% \u00f7 ' + m + ' = <b>' + pct(S.RATE / 100 / m, 5) + '</b> per ' + FREQ_WORD[m]
+      + (res.ok ? ' &nbsp;&nbsp;\u00b7&nbsp;&nbsp; solved <b>N</b> = ' + num(res.n, 2) + ' periods \u00f7 ' + m + ' = <b>' + num(res.value, 2) + ' years</b>' : '');
+  } else {
+    u = '<b>r</b> = ' + sig(S.RATE) + '% \u00f7 ' + m + ' = <b>' + pct(S.RATE / 100 / m, 5) + '</b> per ' + FREQ_WORD[m]
+      + ' &nbsp;&nbsp;\u00b7&nbsp;&nbsp; <b>N</b> = ' + sig(S.N) + ' years \u00d7 ' + m + ' = <b>' + num(S.N * m, 0) + ' periods</b>';
+  }
+  u += '<br>The minus signs here are necessary given that inflows and outflows are entered as positive and negative numbers.';
+  document.getElementById('unitsLine').innerHTML = u;
+}
+
+/* ===== Excel / HP ===================================================== */
+function excelArgs(r) {
+  const m = S.M;
+  const rateExpr = (m === 1) ? raw(S.RATE) + '%' : raw(S.RATE) + '%/' + m;
+  const nperExpr = (m === 1) ? raw(S.N) : raw(S.N) + '*' + m;
+  const g = (x) => raw(x);
+  if (S.target === 'PV')   return '=PV(' + rateExpr + ', ' + nperExpr + ', ' + g(S.PMT) + ', ' + g(S.FV) + (S.type === 1 ? ', 1' : '') + ')';
+  if (S.target === 'FV')   return '=FV(' + rateExpr + ', ' + nperExpr + ', ' + g(S.PMT) + ', ' + g(S.PV) + (S.type === 1 ? ', 1' : '') + ')';
+  if (S.target === 'PMT')  return '=PMT(' + rateExpr + ', ' + nperExpr + ', ' + g(S.PV) + ', ' + g(S.FV) + (S.type === 1 ? ', 1' : '') + ')';
+  if (S.target === 'RATE') return '=RATE(' + nperExpr + ', ' + g(S.PMT) + ', ' + g(S.PV) + ', ' + g(S.FV) + (S.type === 1 ? ', 1' : '') + ')' + (m === 1 ? '' : ' * ' + m);
+  return '=NPER(' + rateExpr + ', ' + g(S.PMT) + ', ' + g(S.PV) + ', ' + g(S.FV) + (S.type === 1 ? ', 1' : '') + ')' + (m === 1 ? '' : ' / ' + m);
+}
+
+function renderCode(r) {
+  const m = S.M;
+  const formula = excelArgs(r);
+  let ans = '';
+  if (r.ok) {
+    if (S.target === 'RATE') ans = num(r.value, 4) + '%';
+    else if (S.target === 'N') ans = num(r.value, 4) + ' years';
+    else ans = money(r.value);
+  } else ans = 'no solution';
+
+  let ex = '<span class="cmt">// paste this into any cell</span>\n' + formula + '\n\n<span class="cmt">// returns</span>\n<span class="out">' + ans + '</span>';
+  if (S.target === 'RATE') ex += '\n\n<span class="cmt">// RATE returns the rate per period,\n// so multiply by ' + m + ' for the annual figure</span>';
+  if (S.target === 'N') ex += '\n\n<span class="cmt">// NPER returns periods,\n// so divide by ' + m + ' for years</span>';
+  document.getElementById('excelBlock').innerHTML = ex;
+
+  const K = (s) => '<span class="key">' + s + '</span>';
+  const lines = [];
+  const padTo = (str, n) => str + ' '.repeat(Math.max(1, n - str.length));
+  lines.push(padTo(raw(m), 14) + K('[\u21e7] [P/YR]') + '   <span class="cmt">' + m + ' period' + (m > 1 ? 's' : '') + ' per year</span>');
+  if (S.type === 1) lines.push(padTo('', 14) + K('[\u21e7] [BEG/END]') + '   <span class="cmt">switch to BEGIN mode</span>');
+
+  const nPeriods = (S.target === 'N') ? null : raw(Math.round(S.N * m));
+  const entries = [];
+  if (S.target !== 'N')    entries.push([nPeriods, 'N']);
+  if (S.target !== 'RATE') entries.push([raw(S.RATE), 'I/YR']);
+  if (S.target !== 'PV')   entries.push([raw(S.PV), 'PV']);
+  if (S.target !== 'PMT')  entries.push([raw(S.PMT), 'PMT']);
+  if (S.target !== 'FV')   entries.push([raw(S.FV), 'FV']);
+  entries.forEach(e => { lines.push(padTo(String(e[0]), 14) + K('[' + e[1] + ']')); });
+  const outKey = S.target === 'RATE' ? 'I/YR' : (S.target === 'N' ? 'N' : S.target);
+  const outVal = r.ok ? (S.target === 'RATE' ? num(r.value, 3) + '%'
+                      : S.target === 'N' ? num(r.n, 2) + ' periods'
+                      : money(r.value)) : '\u2014';
+  lines.push(padTo('', 14) + K('[' + outKey + ']') + '   <span class="cmt">\u2192</span> <span class="out">' + outVal + '</span>');
+  document.getElementById('hpBlock').innerHTML = lines.join('\n');
+}
+
+/* ===== timeline ======================================================= */
+function visiblePeriods(n) {
+  const N = Math.max(0, Math.round(n));
+  if (N <= 24) {
+    const a = [];
+    for (let t = 0; t <= N; t++) a.push({ t: t });
+    return a;
+  }
+  const a = [];
+  for (let t = 0; t <= 3; t++) a.push({ t: t });
+  a.push({ gap: true });
+  for (let t = N - 3; t <= N; t++) a.push({ t: t });
+  return a;
+}
+
+function drawTimeline(r) {
+  const cv = document.getElementById('tl');
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = Math.max(320, Math.round(cv.clientWidth || cv.parentNode.clientWidth || 1000));
+  const cssH = 280;
+  cv.width = Math.round(cssW * dpr);
+  cv.height = Math.round(cssH * dpr);
+  cv.style.height = cssH + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const W = cssW, H = cssH;
+  ctx.clearRect(0, 0, W, H);
+
+  const css = getComputedStyle(document.documentElement);
+  const CA = css.getPropertyValue('--color-a').trim();
+  const CB = css.getPropertyValue('--color-b').trim();
+  const CC = css.getPropertyValue('--color-c').trim();
+  const MUT = css.getPropertyValue('--text-muted').trim();
+  const BD = css.getPropertyValue('--border').trim();
+
+  const nPeriods = (S.target === 'N')
+    ? (r.ok ? Math.max(1, Math.round(r.n)) : 12)
+    : Math.max(1, Math.round(S.N * S.M));
+
+  const pts = visiblePeriods(nPeriods);
+  const padL = 55, padR = 45;
+  const y0 = H / 2 + 8;
+  const step = (W - padL - padR) / Math.max(1, pts.length - 1);
+  const xOf = (idx) => padL + idx * step;
+
+  // axis
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(padL - 28, y0); ctx.lineTo(W - padR + 22, y0); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(W - padR + 22, y0); ctx.lineTo(W - padR + 13, y0 - 4.5); ctx.lineTo(W - padR + 13, y0 + 4.5);
+  ctx.closePath(); ctx.fillStyle = '#333'; ctx.fill();
+
+  // what flows at each period
+  const solvedIs = S.target;
+  const pvVal  = (solvedIs === 'PV')  ? (r.ok ? r.value : null) : S.PV;
+  const fvVal  = (solvedIs === 'FV')  ? (r.ok ? r.value : null) : S.FV;
+  const pmtVal = (solvedIs === 'PMT') ? (r.ok ? r.value : null) : S.PMT;
+
+  const firstPmt = S.type === 1 ? 0 : 1;
+  const lastPmt  = S.type === 1 ? nPeriods - 1 : nPeriods;
+
+  const flowsAt = (t) => {
+    const out = [];
+    if (t === 0 && pvVal !== null && Math.abs(pvVal) > 1e-9) out.push({ v: pvVal, kind: 'PV' });
+    if (t === 0 && pvVal === null && solvedIs === 'PV') out.push({ v: null, kind: 'PV' });
+    if (t >= firstPmt && t <= lastPmt) {
+      if (pmtVal !== null && Math.abs(pmtVal) > 1e-9) out.push({ v: pmtVal, kind: 'PMT' });
+      else if (pmtVal === null && solvedIs === 'PMT') out.push({ v: null, kind: 'PMT' });
+    }
+    if (t === nPeriods && fvVal !== null && Math.abs(fvVal) > 1e-9) out.push({ v: fvVal, kind: 'FV' });
+    if (t === nPeriods && fvVal === null && solvedIs === 'FV') out.push({ v: null, kind: 'FV' });
+    return out;
+  };
+
+  // scale
+  let maxAbs = 0;
+  [pvVal, fvVal, pmtVal].forEach(v => { if (v !== null && isFinite(v)) maxAbs = Math.max(maxAbs, Math.abs(v)); });
+  if (maxAbs <= 0) maxAbs = 1;
+  const MAXH = 92;
+  const hOf = (v) => Math.max(11, MAXH * Math.sqrt(Math.abs(v) / maxAbs));
+
+  ctx.font = '500 11px "JetBrains Mono", monospace';
+  ctx.textAlign = 'center';
+
+  // period ticks and labels
+  pts.forEach((p, idx) => {
+    const x = xOf(idx);
+    if (p.gap) {
+      ctx.fillStyle = MUT; ctx.font = '400 15px "JetBrains Mono", monospace';
+      ctx.fillText('\u22ef', x, y0 + 5);
+      ctx.font = '500 11px "JetBrains Mono", monospace';
+      return;
+    }
+    ctx.strokeStyle = BD; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, y0 - 5); ctx.lineTo(x, y0 + 5); ctx.stroke();
+    ctx.fillStyle = MUT;
+    ctx.fillText(String(p.t), x, y0 + 20);
+  });
+
+  // axis caption
+  ctx.textAlign = 'left'; ctx.fillStyle = MUT; ctx.font = '400 11px "JetBrains Mono", monospace';
+  ctx.fillText(FREQ_WORD[S.M] + 's', padL - 50, y0 + 20);
+
+  // arrows
+  const drawArrow = (x, v, kind, isSolved, label, offset) => {
+    const xx = x + (offset || 0);
+    const up = (v === null) ? true : v >= 0;
+    const h = (v === null) ? 62 : hOf(v);
+    const yEnd = up ? y0 - h : y0 + h;
+    const col = isSolved ? CC : (kind === 'PMT' ? CB : CA);
+
+    ctx.strokeStyle = col; ctx.fillStyle = col;
+    ctx.lineWidth = isSolved ? 3.2 : 2.2;
+    if (v === null) { ctx.setLineDash([5, 4]); ctx.lineWidth = 2.4; }
+    ctx.beginPath(); ctx.moveTo(xx, y0); ctx.lineTo(xx, yEnd); ctx.stroke();
+    ctx.setLineDash([]);
+
+    const dir = up ? -1 : 1;
+    ctx.beginPath();
+    ctx.moveTo(xx, yEnd + dir * 1);
+    ctx.lineTo(xx - 5, yEnd - dir * 8);
+    ctx.lineTo(xx + 5, yEnd - dir * 8);
+    ctx.closePath(); ctx.fill();
+
+    if (isSolved) {
+      ctx.beginPath();
+      ctx.arc(xx, yEnd - dir * 3, 12, 0, Math.PI * 2);
+      ctx.strokeStyle = CC; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.35; ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    if (label) {
+      ctx.textAlign = 'center';
+      ctx.font = (isSolved ? '600 ' : '500 ') + '11px "JetBrains Mono", monospace';
+      ctx.fillStyle = col;
+      ctx.fillText(label, xx, up ? yEnd - 19 : yEnd + 27);
+    }
+  };
+
+  pts.forEach((p, idx) => {
+    if (p.gap) return;
+    const x = xOf(idx);
+    const fl = flowsAt(p.t);
+    fl.forEach((f, k) => {
+      const isSolved = (f.kind === solvedIs);
+      const off = fl.length > 1 ? (k === 0 ? -7 : 7) : 0;
+      // label lump sums always; label the payment only on its first appearance
+      let lbl = null;
+      const named = (v) => (isSolved ? f.kind + ' = ' : '') + moneyShort(v);
+      if (f.kind === 'PMT') {
+        if (p.t === firstPmt) lbl = (f.v === null) ? 'PMT = ?' : named(f.v);
+      } else {
+        lbl = (f.v === null) ? f.kind + ' = ?' : named(f.v);
+      }
+      drawArrow(x, f.v, f.kind, isSolved, lbl, off);
+    });
+  });
+
+  // when the length of the timeline is the unknown, mark the far end
+  if (solvedIs === 'N' && r.ok) {
+    const xEnd = xOf(pts.length - 1);
+    ctx.textAlign = 'right'; ctx.fillStyle = CC;
+    ctx.font = '600 11.5px "JetBrains Mono", monospace';
+    ctx.fillText('T = ' + num(r.value, 2) + ' years', W - padR + 20, y0 - 16);
+    ctx.textAlign = 'center';
+    ctx.fillText(String(Math.round(r.n)), xEnd, y0 + 20);
+    ctx.strokeStyle = CC; ctx.lineWidth = 2.4;
+    ctx.beginPath(); ctx.moveTo(xEnd, y0 - 7); ctx.lineTo(xEnd, y0 + 7); ctx.stroke();
+  }
+
+  // rate ribbon under the axis
+  if (r.ok && isFinite(r.i)) {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = solvedIs === 'RATE' ? CC : MUT;
+    ctx.font = (solvedIs === 'RATE' ? '600 ' : '400 ') + '11.5px "JetBrains Mono", monospace';
+    ctx.fillText('r = ' + pct(r.i, 4) + ' per ' + FREQ_WORD[S.M] + '   \u00b7   N = ' + num(nPeriods, 0) + ' periods',
+                 (padL + W - padR) / 2, H - 12);
+  }
+
+  // legend: only show the rows that appear on the chart
+  const showLump = (pvVal !== null && Math.abs(pvVal) > 1e-9) || (fvVal !== null && Math.abs(fvVal) > 1e-9)
+                   || solvedIs === 'PV' || solvedIs === 'FV';
+  const showPmt  = (pmtVal !== null && Math.abs(pmtVal) > 1e-9) || solvedIs === 'PMT';
+  document.getElementById('lg-lump').style.display = showLump ? '' : 'none';
+  document.getElementById('lg-pmt').style.display  = showPmt  ? '' : 'none';
+}
+
+/* ===== render ========================================================= */
+const FIELD_IDS = ['N', 'RATE', 'PV', 'PMT', 'FV'];
+const TITLES = { PV: 'Present value', FV: 'Future value', RATE: 'Annual interest rate', PMT: 'Payment', N: 'Number of years' };
+
+function render() {
+  const r = compute();
+
+  // segmented control
+  document.querySelectorAll('#segSolve .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.t === S.target));
+  document.querySelectorAll('#segType .mini-btn').forEach(b => b.classList.toggle('active', +b.dataset.type === S.type));
+
+  // fields
+  FIELD_IDS.forEach(id => {
+    const wrap = document.getElementById('f-' + id);
+    const inp = document.getElementById('in-' + id);
+    const solving = (id === S.target);
+    wrap.classList.toggle('solving', solving);
+    inp.readOnly = solving;
+    if (solving) {
+      if (r.ok) {
+        inp.value = (id === 'RATE') ? num(r.value, 4) : (id === 'N' ? num(r.value, 4) : num(r.value, 2));
+      } else inp.value = '';
+      inp.placeholder = '?';
+    } else {
+      inp.value = S[id];
+    }
+  });
+  document.getElementById('in-M').value = S.M;
+
+  const m = S.M;
+  document.getElementById('hint-N').textContent = (S.target === 'N')
+    ? 'solving for this' : '= ' + num(S.N * m, 0) + ' ' + FREQ_WORD[m] + (S.N * m === 1 ? '' : 's');
+  document.getElementById('hint-RATE').textContent = (S.target === 'RATE')
+    ? 'solving for this' : 'r = ' + pct(S.RATE / 100 / m, 4) + ' per ' + FREQ_WORD[m];
+  document.getElementById('hint-PMT').textContent = 'each ' + FREQ_WORD[m];
+
+  // answer
+  document.getElementById('ansTitle').textContent = TITLES[S.target];
+  const av = document.getElementById('ansValue');
+  const an = document.getElementById('ansNote');
+  if (r.ok) {
+    av.classList.remove('error');
+    if (S.target === 'RATE') {
+      av.textContent = num(r.value, 3) + '%';
+      an.textContent = 'nominal annual rate, compounded ' + FREQ_ADJ[m] + ' \u2014 that is ' + pct(r.i, 4) + ' per ' + FREQ_WORD[m];
+    } else if (S.target === 'N') {
+      av.textContent = num(r.value, 2) + ' years';
+      an.textContent = num(r.n, 2) + ' ' + FREQ_WORD[m] + 's at ' + pct(r.i, 4) + ' per ' + FREQ_WORD[m];
+    } else {
+      av.textContent = money(r.value);
+      an.textContent = r.value < 0 ? 'negative, so this is money you pay out' : 'positive, so this is money you receive';
+    }
+  } else {
+    av.classList.add('error');
+    av.textContent = r.msg;
+    an.textContent = '';
+  }
+
+  const iShow = (S.target === 'RATE') ? (r.ok ? r.i : null) : S.RATE / 100 / m;
+  document.getElementById('dv-i').textContent = (iShow === null || !isFinite(iShow)) ? '\u2014' : pct(iShow, 4);
+  document.getElementById('dv-n').textContent = (S.target === 'N')
+    ? (r.ok ? num(r.n, 2) : '\u2014') : num(S.N * m, 0);
+  document.getElementById('dv-ear').textContent = (iShow === null || !isFinite(iShow)) ? '\u2014' : pct(earOf(iShow, m), 3);
+
+  renderFormula(r);
+  renderCode(r);
+  drawTimeline(r);
+}
+
+/* ===== wiring ========================================================= */
+document.querySelectorAll('#segSolve .seg-btn').forEach(b => {
+  b.addEventListener('click', () => { S.target = b.dataset.t; render(); });
+});
+document.querySelectorAll('#segType .mini-btn').forEach(b => {
+  b.addEventListener('click', () => { S.type = +b.dataset.type; render(); });
+});
+const DECIMALS = { RATE: 3, N: 3, PV: 2, PMT: 2, FV: 2 };
+function commit(id) {
+  if (id === S.target) return;
+  const inp = document.getElementById('in-' + id);
+  let v = parseFloat(inp.value);
+  if (!isFinite(v)) v = 0;
+  const d = DECIMALS[id];
+  v = Math.round((v + Number.EPSILON) * Math.pow(10, d)) / Math.pow(10, d);
+  S[id] = v;
+  inp.value = v;
+  render();
+}
+FIELD_IDS.forEach(id => {
+  const inp = document.getElementById('in-' + id);
+  // recalculate only when the field is committed, not on every keystroke
+  inp.addEventListener('change', () => commit(id));
+  inp.addEventListener('blur', () => commit(id));
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commit(id); inp.blur(); } });
+});
+document.getElementById('in-M').addEventListener('change', e => { S.M = +e.target.value; render(); });
+document.querySelectorAll('.preset-btn').forEach(b => {
+  b.addEventListener('click', () => { S = Object.assign({}, PRESETS[b.dataset.p]); render(); });
+});
+document.getElementById('resetBtn').addEventListener('click', () => { S = Object.assign({}, DEFAULTS); render(); });
+
+window.addEventListener('resize', () => drawTimeline(compute()));
+
+render();
+</script>
+</body>
+</html>
