@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prices, Yields, Spot Rates &amp; Forward Rates: RSM 1631</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --color-a:  #0072B2;   /* blue          : Bond A */
+    --color-b:  #E69F00;   /* orange        : Bond B */
+    --color-c:  #009E73;   /* green         : Bond C */
+    --color-d:  #CC79A7;   /* reddish purple: forward leg */
+    --color-err:#D55E00;   /* vermillion    : errors */
+
+    --bg: #faf9f7; --panel-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b7280;
+    --border: #e5e2dd; --accent: #1a1a1a; --input-bg: #f5f4f2;
+    --in-tint:  #fdf6e3;   /* the spreadsheet's yellow input cells */
+    --in-edge:  #e6d9b4;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  }
+  body {
+    font-family: 'Source Serif 4', Georgia, serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; padding: 2rem 1.5rem;
+  }
+  .container { max-width: 1180px; margin: 0 auto; }
+
+  h1 { font-size: 1.6rem; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 0.25rem; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.4rem; }
+
+  /* ---------- Mode tabs ---------- */
+  .tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .tab {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.76rem; font-weight: 500;
+    letter-spacing: 0.02em; padding: 0.5rem 0.85rem;
+    border: 1px solid var(--border); border-radius: 8px;
+    background: var(--panel-bg); color: var(--text-muted); cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .tab:hover { border-color: #cfcac2; }
+  .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .tab .num { opacity: 0.55; margin-right: 0.45rem; }
+
+  .panel {
+    background: var(--panel-bg); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: var(--shadow); padding: 1.3rem 1.4rem; margin-bottom: 1.15rem;
+  }
+
+  /* forward-rate inputs: row 1 = start year + its rate, row 2 = end year + its rate */
+  .fwd-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 310px)); gap: 0.35rem 2.4rem; }
+  @media (max-width: 700px) { .fwd-grid { grid-template-columns: 1fr; } }
+
+  .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 0.85rem; }
+  .section-label {
+    font-size: 0.76rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+  .hint { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; }
+
+  /* ---------- Forward-tab fields ---------- */
+  .field { display: flex; justify-content: space-between; align-items: baseline; gap: 0.9rem; padding: 0.32rem 0; }
+  .field label { font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem; font-weight: 500; color: var(--text-muted); }
+  .num-field {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.83rem; font-weight: 500;
+    width: 6.6rem; text-align: right; padding: 0.22rem 0.35rem;
+    border: 1px solid var(--in-edge); border-radius: 5px;
+    background: var(--in-tint); color: var(--text); transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .num-field:hover { border-color: #d3c191; }
+  .num-field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(26,26,26,0.07); }
+
+  .reset-btn {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem;
+    padding: 0.35rem 0.8rem; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--input-bg); color: var(--text-muted); cursor: pointer;
+    transition: background 0.15s, color 0.15s; white-space: nowrap;
+  }
+  .reset-btn:hover { background: var(--accent); color: #fff; }
+
+  /* ---------- Messages ---------- */
+  .msg {
+    display: flex; gap: 0.6rem; align-items: flex-start;
+    font-size: 0.86rem; line-height: 1.5; padding: 0.7rem 0.85rem;
+    border-radius: 8px; border: 1px solid; margin-bottom: 0.55rem;
+  }
+  .msg .badge {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.64rem; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase; padding: 0.12rem 0.4rem;
+    border-radius: 4px; flex-shrink: 0; margin-top: 0.1rem; color: #fff;
+  }
+  .msg.error { border-color: rgba(213,94,0,0.35);  background: rgba(213,94,0,0.06); }
+  .msg.error .badge { background: var(--color-err); }
+  .msg.warn  { border-color: rgba(230,159,0,0.40); background: rgba(230,159,0,0.08); }
+  .msg.warn .badge { background: var(--color-b); }
+  .msg.ok    { border-color: rgba(0,158,115,0.30); background: rgba(0,158,115,0.06); }
+  .msg.ok .badge { background: var(--color-c); }
+
+  /* ---------- Tables ---------- */
+  table.data { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+  table.data th {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem; font-weight: 600;
+    letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted);
+    text-align: right; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  table.data th:first-child, table.data td:first-child { text-align: left; }
+  table.data td {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.83rem;
+    text-align: right; padding: 0.34rem 0.5rem; border-bottom: 1px solid #f2efea;
+  }
+  table.data tr:last-child td { border-bottom: none; }
+  td.out { color: var(--color-c); font-weight: 600; }
+  td.na  { color: #b8b3ab; }
+
+  /* editable cells */
+  .cell-input {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.83rem; font-weight: 500;
+    width: 100%; min-width: 4.4rem; text-align: right;
+    padding: 0.22rem 0.3rem;
+    border: 1px solid var(--in-edge); border-radius: 5px;
+    background: var(--in-tint); color: var(--text);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .cell-input:hover { border-color: #d3c191; }
+  .cell-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(26,26,26,0.07); }
+  td.editable { padding: 0.22rem 0.35rem; }
+
+  .legend-note {
+    font-size: 0.78rem; color: var(--text-muted); margin-top: 0.8rem;
+    display: flex; gap: 1.2rem; flex-wrap: wrap; align-items: center;
+  }
+  .legend-note .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 0.35rem; vertical-align: -1px; }
+
+  canvas { width: 100%; display: block; }
+
+  .formula-box {
+    background: var(--input-bg); border-radius: 8px; padding: 0.85rem 1rem;
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.86rem; line-height: 1.9;
+    overflow-x: auto; white-space: nowrap;
+  }
+  .formula-box .res { color: var(--color-c); font-weight: 600; }
+  sub { font-size: 0.72em; }
+
+  .kv-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-top: 0.9rem; }
+  .kv { background: var(--input-bg); border-radius: 8px; padding: 0.6rem 0.75rem; }
+  .kv .k { font-family: 'IBM Plex Mono', monospace; font-size: 0.66rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); }
+  .kv .v { font-family: 'IBM Plex Mono', monospace; font-size: 1rem; font-weight: 600; margin-top: 0.15rem; }
+  .hide { display: none !important; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <h1>Prices, Yields, Spot Rates &amp; Forward Rates: RSM 1631</h1>
+  <p class="subtitle">
+    Three bonds, three annual payment dates, face value $100, annual coupons. Choose which pieces you are given &mdash; type into the yellow cells and the rest solves itself.
+  </p>
+
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-mode="1"><span class="num">1</span>Prices &rarr; yields &amp; spot rates</button>
+    <button class="tab" data-mode="2"><span class="num">2</span>Yields &rarr; prices &amp; spot rates</button>
+    <button class="tab" data-mode="3"><span class="num">3</span>Spot rates &rarr; prices &amp; yields</button>
+    <button class="tab" data-mode="4"><span class="num">4</span>Forward rates</button>
+  </div>
+
+  <div>
+    <div id="messages"></div>
+
+    <!-- Modes 1-3 -->
+    <div id="bond-results">
+      <div class="panel">
+        <div class="panel-head">
+          <div class="section-label">The bond table</div>
+          <button class="reset-btn" id="reset-bonds">Reset to spreadsheet defaults</button>
+        </div>
+        <p class="hint" id="mode-hint" style="margin-bottom:0.9rem"></p>
+        <table class="data" id="bond-table"></table>
+        <div class="legend-note">
+          <span><span class="swatch" style="background:var(--in-tint);border:1px solid var(--in-edge)"></span>you set this</span>
+          <span><span class="swatch" style="background:var(--color-c)"></span>solved for you</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><div class="section-label" id="spot-title">Spot rates</div></div>
+        <table class="data" id="spot-table"></table>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><div class="section-label">Term structure of spot rates</div></div>
+        <canvas id="curveCanvas" data-ratio="0.34"></canvas>
+      </div>
+    </div>
+
+    <!-- Mode 4 -->
+    <div id="fwd-results" class="hide">
+      <div class="panel">
+        <div class="panel-head">
+          <div class="section-label">Inputs</div>
+          <button class="reset-btn" id="reset-fwd">Reset to spreadsheet defaults</button>
+        </div>
+        <p class="hint" style="margin-bottom:1rem">Two spot rates imply the rate you can lock in today for the window between them. Annual compounding.</p>
+        <div class="fwd-grid" id="fwd-inputs"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div class="section-label">The forward rate</div></div>
+        <div class="formula-box" id="fwd-formula"></div>
+        <div class="kv-row" id="fwd-kv"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div class="section-label">Two routes to the same date</div></div>
+        <canvas id="fwdCanvas" data-ratio="0.40"></canvas>
+        <p class="hint" id="fwd-note" style="margin-top:0.9rem"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* =========================================================================
+   DEFAULTS — exactly the spreadsheet's problems 1-4
+   ========================================================================= */
+const FACE = 100;
+const BOND_HEX = ['#0072B2', '#E69F00', '#009E73'];
+const NAMES    = ['A', 'B', 'C'];
+
+const DEFAULTS = {
+  py: [                                        // problems 1 & 2 share this structure
+    { mat: 1, cpn: 0.02, price: 100, yld: 0.01 },
+    { mat: 2, cpn: 0.04, price: 105, yld: 0.03 },
+    { mat: 3, cpn: 0.06, price: 108, yld: 0.07 }
+  ],
+  s: [                                         // problem 3
+    { mat: 2, cpn: 0.03 },
+    { mat: 2, cpn: 0.08 },
+    { mat: 3, cpn: 0.00 }
+  ],
+  spots: [0.02, 0.04, 0.05],
+  fwd: { s: 3, e: 5, rs: 0.03, re: 0.05 }
+};
+
+const state = {
+  mode: 1,
+  py:    DEFAULTS.py.map(b => ({ ...b })),
+  s:     DEFAULTS.s.map(b => ({ ...b })),
+  spots: DEFAULTS.spots.slice(),
+  fwd:   { ...DEFAULTS.fwd }
+};
+
+/* =========================================================================
+   MATH
+   ========================================================================= */
+
+// Cash flows in years 1..3, mirroring the workbook's IF() ladder.
+function bondCF(mat, cpn) {
+  const cf = [0, 0, 0];
+  for (let t = 1; t <= 3; t++) {
+    if (t < mat)        cf[t - 1] = cpn * FACE;
+    else if (t === mat) cf[t - 1] = (1 + cpn) * FACE;
+  }
+  return cf;
+}
+
+function maxAbs(A) {
+  let m = 0;
+  for (const row of A) for (const v of row) m = Math.max(m, Math.abs(v));
+  return m;
+}
+
+// Gauss-Jordan on [A | I | b].
+function solveAndInvert(A, b) {
+  const n = A.length;
+  const M = A.map((row, i) => [
+    ...row,
+    ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0)),
+    b[i]
+  ]);
+  const scale = Math.max(maxAbs(A), 1e-300);
+  for (let col = 0; col < n; col++) {
+    let piv = col;
+    for (let r = col + 1; r < n; r++) if (Math.abs(M[r][col]) > Math.abs(M[piv][col])) piv = r;
+    if (Math.abs(M[piv][col]) < 1e-10 * scale) return { ok: false, x: null, inv: null };
+    if (piv !== col) { const tmp = M[piv]; M[piv] = M[col]; M[col] = tmp; }
+    const p = M[col][col];
+    for (let j = 0; j < M[col].length; j++) M[col][j] /= p;
+    for (let r = 0; r < n; r++) {
+      if (r === col) continue;
+      const f = M[r][col];
+      if (f === 0) continue;
+      for (let j = 0; j < M[r].length; j++) M[r][j] -= f * M[col][j];
+    }
+  }
+  return { ok: true, x: M.map(r => r[2 * n]), inv: M.map(r => r.slice(n, 2 * n)) };
+}
+
+function normInf(A) { return Math.max(...A.map(r => r.reduce((s, v) => s + Math.abs(v), 0))); }
+
+// Plain-English reason a 3x3 cash-flow matrix has no inverse.
+function singularReason(C) {
+  for (let j = 0; j < 3; j++) {
+    if (C.every(r => Math.abs(r[j]) < 1e-9)) {
+      return 'No bond pays anything in year ' + (j + 1) + '. Nothing in the table tells you what a year-' + (j + 1) +
+             ' dollar is worth, so there is no way to find the year-' + (j + 1) +
+             ' spot rate. Set at least one bond\u2019s maturity to ' + (j + 1) + ' or longer.';
+    }
+  }
+  for (let i = 0; i < 3; i++) for (let k = i + 1; k < 3; k++) {
+    if (C[i].every((v, j) => Math.abs(v - C[k][j]) < 1e-9)) {
+      return 'Bonds ' + NAMES[i] + ' and ' + NAMES[k] + ' have identical cash flows, so they tell you the same thing twice. ' +
+             'You effectively have two bonds, not three. Change one of their coupons or maturities.';
+    }
+  }
+  for (let j = 0; j < 3; j++) for (let k = j + 1; k < 3; k++) {
+    if (C.every(r => Math.abs(r[j] - r[k]) < 1e-9)) {
+      return 'Every bond pays the same amount in year ' + (j + 1) + ' as it does in year ' + (k + 1) +
+             ', because all three still have coupons outstanding in both years. A year-' + (j + 1) +
+             ' dollar and a year-' + (k + 1) + ' dollar are indistinguishable here. Set one bond\u2019s maturity to ' + (j + 1) + '.';
+    }
+  }
+  return 'The three bonds\u2019 cash flow patterns are linearly dependent: one is a mix of the other two. ' +
+         'Three bonds that overlap this way cannot pin down three separate spot rates.';
+}
+
+function pvAt(cf, y) {
+  let pv = 0;
+  for (let t = 1; t <= cf.length; t++) pv += cf[t - 1] / Math.pow(1 + y, t);
+  return pv;
+}
+
+// IRR: cash flows are non-negative, so PV falls monotonically in y and bisection is safe.
+function yieldFromPrice(cf, price) {
+  const total = cf.reduce((a, b) => a + b, 0);
+  if (!(price > 0) || total <= 0) return null;
+  let lo = -0.999999, hi = 1;
+  while (pvAt(cf, hi) > price) { hi *= 2; if (hi > 1e6) return null; }
+  if (pvAt(cf, lo) < price) return null;
+  for (let i = 0; i < 200; i++) {
+    const mid = 0.5 * (lo + hi);
+    if (pvAt(cf, mid) > price) lo = mid; else hi = mid;
+  }
+  return 0.5 * (lo + hi);
+}
+
+const DASH = '\u2014';
+const fmtPct = (x, d = 4) => (x === null || x === undefined || !isFinite(x)) ? DASH : (100 * x).toFixed(d);
+const fmtNum = (x, d = 4) => (x === null || x === undefined || !isFinite(x)) ? DASH : x.toFixed(d);
+
+/* =========================================================================
+   MODEL — modes 1-3
+   ========================================================================= */
+function computeBondModel() {
+  const mode = state.mode;
+  const bonds = (mode === 3 ? state.s : state.py).map(b => ({ ...b }));
+  const C = bonds.map(b => bondCF(b.mat, b.cpn));
+  const msgs = [];
+  let prices = null, yields = null, d = null, spots = null, cond = null;
+
+  if (mode === 3) {
+    const r = state.spots;
+    if (r.some(v => v <= -1)) {
+      msgs.push({ t: 'error', b: 'Check', m: 'A spot rate of \u2212100% or lower makes the discount factor undefined. Raise it above \u2212100%.' });
+      return { bad: true, msgs, bonds, C, prices, yields, spots: r.slice() };
+    }
+    spots = r.slice();
+    d = r.map((v, i) => 1 / Math.pow(1 + v, i + 1));
+    prices = C.map(cf => cf.reduce((s, v, j) => s + v * d[j], 0));
+    yields = C.map((cf, i) => yieldFromPrice(cf, prices[i]));
+  } else {
+    if (mode === 1) {
+      prices = bonds.map(b => b.price);
+      yields = C.map((cf, i) => yieldFromPrice(cf, prices[i]));
+    } else {
+      yields = bonds.map(b => b.yld);
+      prices = C.map((cf, i) => pvAt(cf, yields[i]));
+    }
+    const sol = solveAndInvert(C, prices);
+    if (!sol.ok) {
+      msgs.push({ t: 'error', b: 'No spot rates', m: singularReason(C) });
+      return { bad: true, msgs, bonds, C, prices, yields, spots: null };
+    }
+    d = sol.x;
+    cond = normInf(C) * normInf(sol.inv);
+    spots = d.map((v, i) => (v > 0 ? Math.pow(1 / v, 1 / (i + 1)) - 1 : null));
+  }
+
+  // one-year forwards drive the sanity checks only; they are no longer displayed
+  const fwd = d.map((v, i) => {
+    const prev = i === 0 ? 1 : d[i - 1];
+    return (v > 0 && prev > 0) ? prev / v - 1 : null;
+  });
+
+  d.forEach((v, i) => {
+    if (v <= 0) msgs.push({
+      t: 'error', b: 'Impossible', m: 'These inputs imply that $1 received in year ' + (i + 1) + ' is worth ' +
+      fmtNum(v, 4) + ' today. A dollar in the future cannot be worth zero or less, so there is no year-' + (i + 1) +
+      ' spot rate. The three prices are inconsistent with one another.'
+    });
+  });
+
+  // Calibrated against the input limits: the healthy default sits near 1, the
+  // spreadsheet's problem 3 near 49, and two same-maturity bonds whose coupons
+  // differ by half a point or less land above 400.
+  if (cond !== null && cond > 400 && !msgs.some(m => m.t === 'error')) {
+    msgs.push({
+      t: 'warn', b: 'Fragile', m: 'These three bonds are nearly redundant, so the spot rates below are extremely sensitive: ' +
+      'change one price by a cent and they move a lot. The answer is technically unique but not reliable. ' +
+      'Try maturities and coupons that differ more.'
+    });
+  }
+
+  fwd.forEach((f, i) => {
+    if (f !== null && f < 0 && i > 0) msgs.push({
+      t: 'warn', b: 'Negative forward', m: 'The rate implied for year ' + (i + 1) + ' on its own is ' + fmtPct(f, 2) +
+      '%. A dollar locked away from year ' + i + ' to year ' + (i + 1) + ' comes back smaller than it went in.'
+    });
+  });
+  spots.forEach((r, i) => {
+    if (r !== null && r < 0) msgs.push({
+      t: 'warn', b: 'Negative spot', m: 'The year-' + (i + 1) + ' spot rate is ' + fmtPct(r, 2) +
+      '%, so a dollar delivered in year ' + (i + 1) + ' costs more than a dollar today.'
+    });
+  });
+  if (mode === 1) prices.forEach((p, i) => {
+    if (!(p > 0)) msgs.push({ t: 'error', b: 'Check', m: 'Bond ' + NAMES[i] + ' has a price of ' + fmtNum(p, 2) + '. Prices must be positive.' });
+  });
+  if (msgs.length === 0) msgs.push({
+    t: 'ok', b: 'Solved', m: 'The three bonds have genuinely different cash flow patterns, so they pin down the three spot rates uniquely.'
+  });
+
+  return { bad: false, msgs, bonds, C, prices, yields, d, spots, cond };
+}
+
+/* =========================================================================
+   TABLES — built once per mode, then only the output cells refresh
+   ========================================================================= */
+function cellInput(id, value, min, max, step, decimals) {
+  return '<input class="cell-input" type="number" id="' + id + '" value="' + value.toFixed(decimals) +
+         '" min="' + min + '" max="' + max + '" step="' + step + '">';
+}
+
+// Fires only on `change` — that is, when the field loses focus, Enter is
+// pressed, or a spinner arrow is clicked. Half-typed numbers never recalculate.
+// The value is clamped, rounded, and written back in fixed-decimal form.
+function bind(id, setter, min, max, decimals) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const f = Math.pow(10, decimals);
+  el.addEventListener('change', () => {
+    let v = parseFloat(el.value);
+    if (!isFinite(v)) v = parseFloat(el.defaultValue);
+    v = Math.min(max, Math.max(min, v));
+    v = Math.round(v * f) / f;
+    el.value = v.toFixed(decimals);
+    setter(v);
+    render();
+  });
+}
+
+function buildBondTable() {
+  const mode = state.mode;
+  const arr = mode === 3 ? state.s : state.py;
+  const priceIsInput = (mode === 1);
+  const yieldIsInput = (mode === 2);
+
+  let h = '<tr><th>Bond</th><th>Maturity</th><th>Coupon (%)</th>' +
+          '<th>Yr 1 CF</th><th>Yr 2 CF</th><th>Yr 3 CF</th>' +
+          '<th>Price</th><th>Yield (%)</th></tr>';
+
+  arr.forEach((b, i) => {
+    h += '<tr>' +
+      '<td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + BOND_HEX[i] + ';margin-right:.45rem"></span>' + NAMES[i] + '</td>' +
+      '<td class="editable">' + cellInput('mat-' + i, b.mat, 1, 3, 1, 0) + '</td>' +
+      '<td class="editable">' + cellInput('cpn-' + i, b.cpn * 100, 0, 25, 0.25, 3) + '</td>' +
+      '<td id="cf-' + i + '-0"></td><td id="cf-' + i + '-1"></td><td id="cf-' + i + '-2"></td>' +
+      (priceIsInput
+        ? '<td class="editable">' + cellInput('price-' + i, b.price, 1, 300, 0.25, 3) + '</td>'
+        : '<td class="out" id="price-out-' + i + '"></td>') +
+      (yieldIsInput
+        ? '<td class="editable">' + cellInput('yld-' + i, b.yld * 100, -50, 100, 0.05, 3) + '</td>'
+        : '<td class="out" id="yield-out-' + i + '"></td>') +
+      '</tr>';
+  });
+  document.getElementById('bond-table').innerHTML = h;
+
+  arr.forEach((b, i) => {
+    bind('mat-' + i,   v => { b.mat = v; },       1,   3,   0);
+    bind('cpn-' + i,   v => { b.cpn = v / 100; }, 0,   25,  3);
+    if (priceIsInput) bind('price-' + i, v => { b.price = v; },     1,   300, 3);
+    if (yieldIsInput) bind('yld-' + i,   v => { b.yld = v / 100; }, -50, 100, 3);
+  });
+}
+
+function buildSpotTable() {
+  const editable = (state.mode === 3);
+  let h = '<tr><th>Year</th><th>Spot rate (%)</th></tr>';
+  for (let i = 0; i < 3; i++) {
+    h += '<tr><td>' + (i + 1) + '</td>' +
+      (editable
+        ? '<td class="editable" style="width:9rem">' + cellInput('spot-' + i, state.spots[i] * 100, -50, 100, 0.05, 3) + '</td>'
+        : '<td class="out" id="spot-out-' + i + '" style="width:9rem"></td>') +
+      '</tr>';
+  }
+  document.getElementById('spot-table').innerHTML = h;
+  if (editable) for (let i = 0; i < 3; i++) bind('spot-' + i, v => { state.spots[i] = v / 100; }, -50, 100, 3);
+  document.getElementById('spot-title').textContent = editable ? 'Spot rates you set' : 'Spot rates';
+}
+
+/* =========================================================================
+   MODE 4 CONTROLS — paired number fields, no sliders
+   ========================================================================= */
+// onCommit may clamp further (start/end years constrain each other); whatever
+// it returns is what gets written back into the field.
+function fwdField(opts) {
+  const wrap = document.createElement('div');
+  wrap.className = 'field';
+  const lab = document.createElement('label');
+  lab.innerHTML = opts.label;
+  if (opts.labelId) lab.id = opts.labelId;
+  const inp = document.createElement('input');
+  inp.type = 'number'; inp.className = 'num-field';
+  inp.min = opts.min; inp.max = opts.max; inp.step = opts.step;
+  inp.value = opts.value.toFixed(opts.decimals);
+
+  const f = Math.pow(10, opts.decimals);
+  inp.addEventListener('change', () => {
+    let v = parseFloat(inp.value);
+    if (!isFinite(v)) v = opts.value;
+    v = Math.min(opts.max, Math.max(opts.min, v));
+    v = Math.round(v * f) / f;
+    const used = opts.onCommit(v);
+    inp.value = (used === undefined ? v : used).toFixed(opts.decimals);
+    render();
+  });
+
+  wrap.appendChild(lab); wrap.appendChild(inp);
+  return wrap;
+}
+
+function buildForwardControls() {
+  const box = document.getElementById('fwd-inputs');
+  box.innerHTML = '';
+  const f = state.fwd;
+
+  // Row 1: start year and its spot rate.  Row 2: end year and its spot rate.
+  box.appendChild(fwdField({
+    label: 'Start year&nbsp;&nbsp;<i>s</i>', min: 0, max: 19, step: 1, value: f.s, decimals: 0,
+    onCommit: v => { const c = Math.min(v, state.fwd.e - 1); state.fwd.s = c; return c; }
+  }));
+  box.appendChild(fwdField({
+    labelId: 'lab-rs', label: 'Spot rate&nbsp;&nbsp;r<sub>' + f.s + '</sub>&nbsp;(%)',
+    min: -50, max: 100, step: 0.05, value: f.rs * 100, decimals: 3,
+    onCommit: v => { state.fwd.rs = v / 100; }
+  }));
+  box.appendChild(fwdField({
+    label: 'End year&nbsp;&nbsp;<i>e</i>', min: 1, max: 20, step: 1, value: f.e, decimals: 0,
+    onCommit: v => { const c = Math.max(v, state.fwd.s + 1); state.fwd.e = c; return c; }
+  }));
+  box.appendChild(fwdField({
+    labelId: 'lab-re', label: 'Spot rate&nbsp;&nbsp;r<sub>' + f.e + '</sub>&nbsp;(%)',
+    min: -50, max: 100, step: 0.05, value: f.re * 100, decimals: 3,
+    onCommit: v => { state.fwd.re = v / 100; }
+  }));
+}
+
+/* =========================================================================
+   RENDER — messages and cells
+   ========================================================================= */
+function renderMessages(msgs) {
+  const box = document.getElementById('messages');
+  box.innerHTML = '';
+  msgs.forEach(m => {
+    const d = document.createElement('div');
+    d.className = 'msg ' + m.t;
+    const b = document.createElement('span');
+    b.className = 'badge'; b.textContent = m.b;
+    const s = document.createElement('span');
+    s.textContent = m.m;
+    d.appendChild(b); d.appendChild(s);
+    box.appendChild(d);
+  });
+}
+
+function setCell(id, text, na) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle('na', !!na);
+}
+
+function renderOutputs(M) {
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+      const v = M.C[i][j];
+      setCell('cf-' + i + '-' + j, fmtNum(v, 3), v === 0);
+    }
+    setCell('price-out-' + i, M.prices ? fmtNum(M.prices[i], 3) : DASH);
+    setCell('yield-out-' + i, M.yields ? fmtPct(M.yields[i], 3) : DASH);
+    setCell('spot-out-' + i, M.spots ? fmtPct(M.spots[i], 3) : DASH);
+  }
+}
+
+/* =========================================================================
+   CANVAS HELPERS
+   ========================================================================= */
+// The backing store is sized from the canvas's *rendered* width, so text is
+// drawn at native device resolution instead of being upscaled by the browser.
+function setupCanvas(cv) {
+  const dpr = window.devicePixelRatio || 1;
+  const measured = cv.clientWidth || (cv.parentNode && cv.parentNode.clientWidth) || 0;
+  const w = Math.round(Math.max(360, measured || 900));
+  const h = Math.round(w * parseFloat(cv.dataset.ratio || '0.34'));
+  cv.width = Math.round(w * dpr);
+  cv.height = Math.round(h * dpr);
+  cv.style.height = h + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  return { ctx, w, h };
+}
+
+const SERIF = "'Source Serif 4', Georgia, serif";
+const MONO  = "'IBM Plex Mono', monospace";
+
+function niceTicks(lo, hi, target) {
+  const raw = (hi - lo) / target;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * mag;
+  const out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-12; v += step) out.push(v);
+  return out;
+}
+
+/* =========================================================================
+   TERM STRUCTURE OF SPOT RATES
+   ========================================================================= */
+function drawCurve(M) {
+  const cv = document.getElementById('curveCanvas');
+  const { ctx, w, h } = setupCanvas(cv);
+  const L = 76, R = 34, T = 30, B = 54;
+  const pw = w - L - R, ph = h - T - B;
+
+  const usable = M.spots ? M.spots.filter(v => v !== null && isFinite(v)) : [];
+  if (!usable.length) {
+    ctx.fillStyle = '#9ca3af'; ctx.font = '15px ' + SERIF;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('No spot curve to draw \u2014 fix the input flagged above.', w / 2, h / 2);
+    return;
+  }
+
+  let lo = Math.min(...usable), hi = Math.max(...usable);
+  if (hi - lo < 0.01) { const mid = (hi + lo) / 2; lo = mid - 0.006; hi = mid + 0.006; }
+  const pad = (hi - lo) * 0.22;
+  lo -= pad; hi += pad;
+
+  const X = t => L + (t / 3) * pw;
+  const Y = r => T + ph - ((r - lo) / (hi - lo)) * ph;
+
+  ctx.strokeStyle = '#eeebe6'; ctx.lineWidth = 1;
+  ctx.font = '11px ' + MONO; ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  niceTicks(lo, hi, 5).forEach(v => {
+    const y = Y(v);
+    ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke();
+    ctx.fillText((100 * v).toFixed(2) + '%', L - 10, y);
+  });
+  if (lo < 0 && hi > 0) {
+    ctx.strokeStyle = '#d8d4cd'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(L, Y(0)); ctx.lineTo(L + pw, Y(0)); ctx.stroke();
+  }
+
+  ctx.strokeStyle = '#d8d4cd'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
+  ctx.font = '12px ' + MONO; ctx.fillStyle = '#6b7280'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let t = 0; t <= 3; t++) ctx.fillText(String(t), X(t), T + ph + 9);
+  ctx.font = '13px ' + SERIF;
+  ctx.fillText('Maturity (years)', L + pw / 2, T + ph + 31);
+
+  const pts = [];
+  for (let i = 0; i < 3; i++) if (M.spots[i] !== null && isFinite(M.spots[i])) pts.push([X(i + 1), Y(M.spots[i])]);
+  if (pts.length > 1) {
+    ctx.strokeStyle = '#0072B2'; ctx.lineWidth = 2.4;
+    ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke();
+  }
+  pts.forEach(p => {
+    ctx.fillStyle = '#0072B2';
+    ctx.beginPath(); ctx.arc(p[0], p[1], 5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+  });
+
+  ctx.font = '600 12px ' + MONO; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.fillStyle = '#0072B2';
+  for (let i = 0; i < 3; i++) {
+    if (M.spots[i] === null || !isFinite(M.spots[i])) continue;
+    const txt = 'r' + (i + 1) + ' = ' + (100 * M.spots[i]).toFixed(3) + '%';
+    const half = ctx.measureText(txt).width / 2 + 2;
+    const cx = Math.min(Math.max(X(i + 1), L + half), L + pw - half);
+    ctx.fillText(txt, cx, Y(M.spots[i]) - 13);
+  }
+}
+
+/* =========================================================================
+   MODE 4 — forward rates (annual compounding)
+   ========================================================================= */
+function computeForward() {
+  const { s, e, rs, re } = state.fwd;
+  const msgs = [];
+  if (e <= s) {
+    msgs.push({ t: 'error', b: 'Check', m: 'The end year must be later than the start year.' });
+    return { bad: true, msgs };
+  }
+  if (1 + rs <= 0 || 1 + re <= 0) {
+    msgs.push({ t: 'error', b: 'Check', m: 'A spot rate at or below \u2212100% wipes out the growth factor. Raise it.' });
+    return { bad: true, msgs };
+  }
+  const gs = Math.pow(1 + rs, s);
+  const ge = Math.pow(1 + re, e);
+  const f = Math.pow(ge / gs, 1 / (e - s)) - 1;
+
+  if (f < 0) {
+    msgs.push({
+      t: 'warn', b: 'Negative forward', m: 'The implied forward rate is ' + fmtPct(f, 2) + '%. r' + e +
+      ' is low enough relative to r' + s + ' that money committed from year ' + s + ' to year ' + e +
+      ' comes back smaller than it went in.'
+    });
+  } else {
+    msgs.push({
+      t: 'ok', b: 'Locked in', m: 'This is the rate you could contract for today covering years ' + s + ' to ' + e +
+      ', using nothing but the two spot rates. No forecast required.'
+    });
+  }
+  return { bad: false, msgs, s, e, rs, re, gs, ge, f };
+}
+
+function renderForward(F) {
+  const { s, e, rs, re, gs, ge, f } = F;
+  const n = e - s;
+  const labS = document.getElementById('lab-rs'), labE = document.getElementById('lab-re');
+  if (labS) labS.innerHTML = 'Spot rate&nbsp;&nbsp;r<sub>' + s + '</sub>&nbsp;(%)';
+  if (labE) labE.innerHTML = 'Spot rate&nbsp;&nbsp;r<sub>' + e + '</sub>&nbsp;(%)';
+
+  const sup = x => '<sup>' + x + '</sup>';
+
+  document.getElementById('fwd-formula').innerHTML =
+    '<sub>' + s + '</sub>f<sub>' + e + '</sub> = [ (1 + r<sub>' + e + '</sub>)' + sup(e) +
+    ' / (1 + r<sub>' + s + '</sub>)' + sup(s) + ' ]' + sup('1/' + n) + ' &minus; 1<br>' +
+    '&nbsp;&nbsp;&nbsp;&nbsp;= [ ' + ge.toFixed(6) + ' / ' + gs.toFixed(6) + ' ]' + sup('1/' + n) + ' &minus; 1' +
+    ' = <span class="res">' + fmtPct(f, 3) + '%</span>';
+
+  document.getElementById('fwd-kv').innerHTML =
+    '<div class="kv"><div class="k">r<sub>' + s + '</sub> = ' + fmtPct(rs, 3) + '% \u2192 $1 grows to</div><div class="v">$' + gs.toFixed(3) + '</div></div>' +
+    '<div class="kv"><div class="k">r<sub>' + e + '</sub> = ' + fmtPct(re, 3) + '% \u2192 $1 grows to</div><div class="v">$' + ge.toFixed(3) + '</div></div>' +
+    '<div class="kv"><div class="k">' + s + 'f' + e + ' over ' + n + ' year' + (n === 1 ? '' : 's') + '</div><div class="v" style="color:var(--color-c)">' + fmtPct(f, 3) + '%</div></div>';
+
+  document.getElementById('fwd-note').innerHTML =
+    'Both routes start with $1 and arrive at the same $' + ge.toFixed(3) + ' in year ' + e + '. That is the whole idea: ' +
+    'the forward rate is whatever it must be for the roll-over route to catch up exactly. If the market quoted anything else ' +
+    'for the year-' + s + '-to-year-' + e + ' window, one route would dominate the other and the trade would be free money.';
+
+  drawForwardChart(F);
+}
+
+function drawForwardChart(F) {
+  const { s, e, rs, re, gs, ge, f } = F;
+  const cv = document.getElementById('fwdCanvas');
+  const { ctx, w, h } = setupCanvas(cv);
+  const L = 80, R = 40, T = 34, B = 56;
+  const pw = w - L - R, ph = h - T - B;
+
+  const grow = (r, t) => Math.pow(1 + r, t);
+  const rollAt = t => t <= s ? grow(rs, t) : gs * Math.pow(1 + f, t - s);
+
+  let hi = Math.max(ge, gs, grow(re, e), rollAt(e), 1);
+  let lo = Math.min(1, ge, gs, rollAt(e), grow(rs, s));
+  const padv = (hi - lo) * 0.18 || 0.05;
+  hi += padv; lo -= padv * 0.6;
+
+  const X = t => L + (t / e) * pw;
+  const Y = v => T + ph - ((v - lo) / (hi - lo)) * ph;
+
+  ctx.strokeStyle = '#eeebe6'; ctx.lineWidth = 1;
+  ctx.font = '11px ' + MONO; ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  niceTicks(lo, hi, 5).forEach(v => {
+    const y = Y(v);
+    ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke();
+    ctx.fillText('$' + v.toFixed(3), L - 10, y);
+  });
+  ctx.strokeStyle = '#d8d4cd'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
+
+  ctx.font = '12px ' + MONO; ctx.fillStyle = '#6b7280'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  const stepX = Math.max(1, Math.round(e / 10));
+  for (let t = 0; t <= e; t += stepX) ctx.fillText(String(t), X(t), T + ph + 9);
+  ctx.font = '13px ' + SERIF;
+  ctx.fillText('Years from today', L + pw / 2, T + ph + 32);
+
+  if (s > 0) {
+    ctx.strokeStyle = '#cfcac2'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(X(s), T); ctx.lineTo(X(s), T + ph); ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  const N = 240;
+  const direct = [], roll = [];
+  for (let i = 0; i <= N; i++) {
+    const t = (i / N) * e;
+    direct.push([X(t), Y(grow(re, t))]);
+    roll.push([X(t), Y(rollAt(t))]);
+  }
+
+  ctx.beginPath();
+  direct.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+  for (let i = roll.length - 1; i >= 0; i--) ctx.lineTo(roll[i][0], roll[i][1]);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(0,114,178,0.06)';
+  ctx.fill();
+
+  function stroke(pts, color, dash) {
+    if (pts.length < 2) return;
+    ctx.strokeStyle = color; ctx.lineWidth = 2.4; ctx.setLineDash(dash || []);
+    ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+  stroke(direct, '#0072B2');
+  const split = Math.round((s / e) * N);
+  stroke(roll.slice(0, split + 1), '#E69F00');
+  stroke(roll.slice(split), '#CC79A7', [7, 5]);
+
+  // --- rate labels sitting on their own curves
+  function label(text, t, yVal, color, above) {
+    ctx.fillStyle = color; ctx.font = '600 12px ' + MONO;
+    ctx.textAlign = 'center'; ctx.textBaseline = above ? 'bottom' : 'top';
+    ctx.fillText(text, X(t), Y(yVal) + (above ? -11 : 11));
+  }
+  const tMid = e * 0.55;
+  const directAbove = grow(re, tMid) >= rollAt(tMid);
+  label('r' + e + ' = ' + (100 * re).toFixed(3) + '%', tMid, grow(re, tMid), '#0072B2', directAbove);
+  if (s >= 1) {
+    const tS = s * 0.5;
+    label('r' + s + ' = ' + (100 * rs).toFixed(3) + '%', tS, grow(rs, tS), '#E69F00', !directAbove);
+  }
+  const tF = (s + e) / 2;
+  label(s + 'f' + e + ' = ' + (100 * f).toFixed(3) + '%', tF, rollAt(tF), '#CC79A7', !directAbove);
+
+  function dot(x, y, color) {
+    ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+  dot(X(e), Y(ge), '#1a1a1a');
+  if (s > 0) dot(X(s), Y(gs), '#E69F00');
+
+  ctx.font = '600 12px ' + MONO; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillText('$' + ge.toFixed(3), X(e) - 8, Y(ge) - 6);
+  if (s > 0) {
+    ctx.fillStyle = '#E69F00'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('$' + gs.toFixed(3), X(s), Y(gs) + 12);
+  }
+
+  // legend
+  ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  let lx = L; const ly = 14;
+  function key(color, text, dash) {
+    ctx.strokeStyle = color; ctx.lineWidth = 2.4; ctx.setLineDash(dash || []);
+    ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx + 20, ly); ctx.stroke(); ctx.setLineDash([]);
+    lx += 26; ctx.fillStyle = '#4b5563'; ctx.font = '12px ' + SERIF;
+    ctx.fillText(text, lx, ly);
+    lx += ctx.measureText(text).width + 20;
+  }
+  key('#0072B2', 'Lock in r' + e + ' for all ' + e + ' years');
+  key('#E69F00', 'Invest at r' + s + ' to year ' + s);
+  key('#CC79A7', 'then roll at ' + s + 'f' + e, [7, 5]);
+}
+
+/* =========================================================================
+   TOP-LEVEL
+   ========================================================================= */
+const HINTS = {
+  1: 'Type three prices. Each bond\u2019s yield is the single rate that reproduces its own price; the spot rates are the three rates that price all three bonds at once.',
+  2: 'Type three yields. Each bond is priced off its own yield, and those prices are then stripped into spot rates. Notice how far the spot curve sits from the yields you typed.',
+  3: 'Set the spot curve below. Every bond is priced off the same discount factors, and its yield falls out as the single rate that reproduces that price.'
+};
+
+function render() {
+  if (state.mode === 4) {
+    const F = computeForward();
+    renderMessages(F.msgs);
+    if (!F.bad) renderForward(F);
+    return;
+  }
+  const M = computeBondModel();
+  renderMessages(M.msgs);
+  renderOutputs(M);
+  drawCurve(M);
+}
+
+function rebuild() {
+  const isFwd = state.mode === 4;
+  document.getElementById('bond-results').classList.toggle('hide', isFwd);
+  document.getElementById('fwd-results').classList.toggle('hide', !isFwd);
+
+  if (isFwd) {
+    buildForwardControls();
+  } else {
+    document.getElementById('mode-hint').textContent = HINTS[state.mode];
+    buildBondTable();
+    buildSpotTable();
+  }
+  render();
+}
+
+document.getElementById('tabs').addEventListener('click', ev => {
+  const btn = ev.target.closest('.tab');
+  if (!btn) return;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  state.mode = parseInt(btn.dataset.mode, 10);
+  rebuild();
+});
+
+document.getElementById('reset-bonds').addEventListener('click', () => {
+  if (state.mode === 3) {
+    state.s = DEFAULTS.s.map(b => ({ ...b }));
+    state.spots = DEFAULTS.spots.slice();
+  } else {
+    state.py = DEFAULTS.py.map(b => ({ ...b }));
+  }
+  rebuild();
+});
+
+document.getElementById('reset-fwd').addEventListener('click', () => {
+  state.fwd = { ...DEFAULTS.fwd };
+  rebuild();
+});
+
+window.addEventListener('resize', () => {
+  if (window.__rt) clearTimeout(window.__rt);
+  window.__rt = setTimeout(render, 150);
+});
+
+rebuild();
+</script>
+</body>
+</html>
