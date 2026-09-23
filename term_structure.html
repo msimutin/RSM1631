@@ -79,6 +79,21 @@
   }
   .reset-btn:hover { background: var(--accent); color: #fff; }
 
+  /* bond-count toggle, sits in the bond-table header */
+  .head-tools { display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap; }
+  .seg-wrap { display: flex; align-items: center; gap: 0.5rem; }
+  .seg-label { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: var(--text-muted); }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+  .seg button {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.74rem; font-weight: 500;
+    padding: 0.32rem 0.75rem; border: none; border-right: 1px solid var(--border);
+    background: var(--panel-bg); color: var(--text-muted); cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .seg button:last-child { border-right: none; }
+  .seg button:hover:not(.on) { background: var(--input-bg); }
+  .seg button.on { background: var(--accent); color: #fff; }
+
   /* ---------- Messages ---------- */
   .msg {
     display: flex; gap: 0.6rem; align-items: flex-start;
@@ -155,7 +170,7 @@
 
   <h1>Prices, Yields, Spot Rates &amp; Forward Rates: RSM 1631</h1>
   <p class="subtitle">
-    Three bonds, three annual payment dates, face value $100, annual coupons. Choose which pieces you are given &mdash; type into the yellow cells and the rest solves itself.
+    Face value $100, annual coupons, one payment date per year. Choose which pieces you are given &mdash; type into the yellow cells and the rest solves itself.
   </p>
 
   <div class="tabs" id="tabs">
@@ -173,10 +188,18 @@
       <div class="panel">
         <div class="panel-head">
           <div class="section-label">The bond table</div>
-          <button class="reset-btn" id="reset-bonds">Reset to spreadsheet defaults</button>
+          <div class="head-tools">
+            <div class="seg-wrap">
+              <span class="seg-label">Number of bonds</span>
+              <div class="seg" id="n-seg">
+                <button data-n="2">2</button><button data-n="3" class="on">3</button><button data-n="4">4</button>
+              </div>
+            </div>
+            <button class="reset-btn" id="reset-bonds">Reset to spreadsheet defaults</button>
+          </div>
         </div>
         <p class="hint" id="mode-hint" style="margin-bottom:0.9rem"></p>
-        <table class="data" id="bond-table"></table>
+        <div style="overflow-x:auto"><table class="data" id="bond-table"></table></div>
         <div class="legend-note">
           <span><span class="swatch" style="background:var(--in-tint);border:1px solid var(--in-edge)"></span>you set this</span>
           <span><span class="swatch" style="background:var(--color-c)"></span>solved for you</span>
@@ -225,40 +248,58 @@
    DEFAULTS — exactly the spreadsheet's problems 1-4
    ========================================================================= */
 const FACE = 100;
-const BOND_HEX = ['#0072B2', '#E69F00', '#009E73'];
-const NAMES    = ['A', 'B', 'C'];
+const BOND_HEX = ['#0072B2', '#E69F00', '#009E73', '#CC79A7'];
+const NAMES    = ['A', 'B', 'C', 'D'];
+const WORD     = { 1: 'one', 2: 'two', 3: 'three', 4: 'four' };
+const bondsWord = k => WORD[k] + (k === 1 ? ' bond' : ' bonds');
+const allBonds  = k => (k === 2 ? 'both bonds' : 'all ' + WORD[k] + ' bonds');
 
+// Keyed by the number of bonds. N = 3 is exactly the spreadsheet; N = 2 is the
+// spreadsheet truncated; N = 4 extends it. Every default solves cleanly with
+// no warnings (checked: all forwards positive, condition numbers under 2).
 const DEFAULTS = {
-  py: [                                        // problems 1 & 2 share this structure
-    { mat: 1, cpn: 0.02, price: 100, yld: 0.01 },
-    { mat: 2, cpn: 0.04, price: 105, yld: 0.03 },
-    { mat: 3, cpn: 0.06, price: 108, yld: 0.07 }
-  ],
-  s: [                                         // problem 3
-    { mat: 2, cpn: 0.03 },
-    { mat: 2, cpn: 0.08 },
-    { mat: 3, cpn: 0.00 }
-  ],
-  spots: [0.02, 0.04, 0.05],
+  py: {                                        // problems 1 & 2 share this structure
+    2: [ { mat: 1, cpn: 0.02, price: 100, yld: 0.01 },
+         { mat: 2, cpn: 0.04, price: 105, yld: 0.03 } ],
+    3: [ { mat: 1, cpn: 0.02, price: 100, yld: 0.01 },
+         { mat: 2, cpn: 0.04, price: 105, yld: 0.03 },
+         { mat: 3, cpn: 0.06, price: 108, yld: 0.07 } ],
+    4: [ { mat: 1, cpn: 0.02, price: 100, yld: 0.01 },
+         { mat: 2, cpn: 0.04, price: 105, yld: 0.03 },
+         { mat: 3, cpn: 0.06, price: 108, yld: 0.07 },
+         { mat: 4, cpn: 0.08, price: 115, yld: 0.08 } ]
+  },
+  s: {                                         // problem 3
+    2: [ { mat: 2, cpn: 0.03 }, { mat: 2, cpn: 0.08 } ],
+    3: [ { mat: 2, cpn: 0.03 }, { mat: 2, cpn: 0.08 }, { mat: 3, cpn: 0.00 } ],
+    4: [ { mat: 2, cpn: 0.03 }, { mat: 2, cpn: 0.08 }, { mat: 3, cpn: 0.00 }, { mat: 4, cpn: 0.06 } ]
+  },
+  spots: { 2: [0.02, 0.04], 3: [0.02, 0.04, 0.05], 4: [0.02, 0.04, 0.05, 0.055] },
   fwd: { s: 3, e: 5, rs: 0.03, re: 0.05 }
 };
 
+const cloneBonds = arr => arr.map(b => ({ ...b }));
 const state = {
   mode: 1,
-  py:    DEFAULTS.py.map(b => ({ ...b })),
-  s:     DEFAULTS.s.map(b => ({ ...b })),
-  spots: DEFAULTS.spots.slice(),
+  n: 3,
+  py:    { 2: cloneBonds(DEFAULTS.py[2]), 3: cloneBonds(DEFAULTS.py[3]), 4: cloneBonds(DEFAULTS.py[4]) },
+  s:     { 2: cloneBonds(DEFAULTS.s[2]),  3: cloneBonds(DEFAULTS.s[3]),  4: cloneBonds(DEFAULTS.s[4]) },
+  spots: { 2: DEFAULTS.spots[2].slice(),  3: DEFAULTS.spots[3].slice(),  4: DEFAULTS.spots[4].slice() },
   fwd:   { ...DEFAULTS.fwd }
 };
+
+// The bonds and spot curve for the current size and tab.
+const curBonds = () => (state.mode === 3 ? state.s : state.py)[state.n];
+const curSpots = () => state.spots[state.n];
 
 /* =========================================================================
    MATH
    ========================================================================= */
 
-// Cash flows in years 1..3, mirroring the workbook's IF() ladder.
-function bondCF(mat, cpn) {
-  const cf = [0, 0, 0];
-  for (let t = 1; t <= 3; t++) {
+// Cash flows in years 1..n, mirroring the workbook's IF() ladder.
+function bondCF(mat, cpn, n) {
+  const cf = new Array(n).fill(0);
+  for (let t = 1; t <= n; t++) {
     if (t < mat)        cf[t - 1] = cpn * FACE;
     else if (t === mat) cf[t - 1] = (1 + cpn) * FACE;
   }
@@ -301,28 +342,29 @@ function normInf(A) { return Math.max(...A.map(r => r.reduce((s, v) => s + Math.
 
 // Plain-English reason a 3x3 cash-flow matrix has no inverse.
 function singularReason(C) {
-  for (let j = 0; j < 3; j++) {
+  const n = C.length;
+  for (let j = 0; j < n; j++) {
     if (C.every(r => Math.abs(r[j]) < 1e-9)) {
       return 'No bond pays anything in year ' + (j + 1) + '. Nothing in the table tells you what a year-' + (j + 1) +
              ' dollar is worth, so there is no way to find the year-' + (j + 1) +
-             ' spot rate. Set at least one bond\u2019s maturity to ' + (j + 1) + ' or longer.';
+             ' spot rate. Set at least one bond\u2019s maturity to ' + (j + 1) + (j + 1 < n ? ' or longer.' : '.');
     }
   }
-  for (let i = 0; i < 3; i++) for (let k = i + 1; k < 3; k++) {
+  for (let i = 0; i < n; i++) for (let k = i + 1; k < n; k++) {
     if (C[i].every((v, j) => Math.abs(v - C[k][j]) < 1e-9)) {
       return 'Bonds ' + NAMES[i] + ' and ' + NAMES[k] + ' have identical cash flows, so they tell you the same thing twice. ' +
-             'You effectively have two bonds, not three. Change one of their coupons or maturities.';
+             'You effectively have ' + bondsWord(n - 1) + ', not ' + WORD[n] + '. Change one of their coupons or maturities.';
     }
   }
-  for (let j = 0; j < 3; j++) for (let k = j + 1; k < 3; k++) {
+  for (let j = 0; j < n; j++) for (let k = j + 1; k < n; k++) {
     if (C.every(r => Math.abs(r[j] - r[k]) < 1e-9)) {
       return 'Every bond pays the same amount in year ' + (j + 1) + ' as it does in year ' + (k + 1) +
-             ', because all three still have coupons outstanding in both years. A year-' + (j + 1) +
+             ', because ' + allBonds(n) + ' still have coupons outstanding in both years. A year-' + (j + 1) +
              ' dollar and a year-' + (k + 1) + ' dollar are indistinguishable here. Set one bond\u2019s maturity to ' + (j + 1) + '.';
     }
   }
-  return 'The three bonds\u2019 cash flow patterns are linearly dependent: one is a mix of the other two. ' +
-         'Three bonds that overlap this way cannot pin down three separate spot rates.';
+  return 'The ' + bondsWord(n) + '\u2019 cash flow patterns are linearly dependent: one is a combination of the others. ' +
+         'Bonds that overlap this way cannot pin down ' + WORD[n] + ' separate spot rates.';
 }
 
 function pvAt(cf, y) {
@@ -354,13 +396,14 @@ const fmtNum = (x, d = 4) => (x === null || x === undefined || !isFinite(x)) ? D
    ========================================================================= */
 function computeBondModel() {
   const mode = state.mode;
-  const bonds = (mode === 3 ? state.s : state.py).map(b => ({ ...b }));
-  const C = bonds.map(b => bondCF(b.mat, b.cpn));
+  const n = state.n;
+  const bonds = curBonds().map(b => ({ ...b }));
+  const C = bonds.map(b => bondCF(b.mat, b.cpn, n));
   const msgs = [];
   let prices = null, yields = null, d = null, spots = null, cond = null;
 
   if (mode === 3) {
-    const r = state.spots;
+    const r = curSpots();
     if (r.some(v => v <= -1)) {
       msgs.push({ t: 'error', b: 'Check', m: 'A spot rate of \u2212100% or lower makes the discount factor undefined. Raise it above \u2212100%.' });
       return { bad: true, msgs, bonds, C, prices, yields, spots: r.slice() };
@@ -397,7 +440,7 @@ function computeBondModel() {
     if (v <= 0) msgs.push({
       t: 'error', b: 'Impossible', m: 'These inputs imply that $1 received in year ' + (i + 1) + ' is worth ' +
       fmtNum(v, 4) + ' today. A dollar in the future cannot be worth zero or less, so there is no year-' + (i + 1) +
-      ' spot rate. The three prices are inconsistent with one another.'
+      ' spot rate. The prices are inconsistent with one another.'
     });
   });
 
@@ -406,7 +449,7 @@ function computeBondModel() {
   // differ by half a point or less land above 400.
   if (cond !== null && cond > 400 && !msgs.some(m => m.t === 'error')) {
     msgs.push({
-      t: 'warn', b: 'Fragile', m: 'These three bonds are nearly redundant, so the spot rates below are extremely sensitive: ' +
+      t: 'warn', b: 'Fragile', m: 'These ' + bondsWord(n) + ' are nearly redundant, so the spot rates below are extremely sensitive: ' +
       'change one price by a cent and they move a lot. The answer is technically unique but not reliable. ' +
       'Try maturities and coupons that differ more.'
     });
@@ -428,7 +471,7 @@ function computeBondModel() {
     if (!(p > 0)) msgs.push({ t: 'error', b: 'Check', m: 'Bond ' + NAMES[i] + ' has a price of ' + fmtNum(p, 2) + '. Prices must be positive.' });
   });
   if (msgs.length === 0) msgs.push({
-    t: 'ok', b: 'Solved', m: 'The three bonds have genuinely different cash flow patterns, so they pin down the three spot rates uniquely.'
+    t: 'ok', b: 'Solved', m: 'The ' + bondsWord(n) + ' have genuinely different cash flow patterns, so they pin down the ' + WORD[n] + ' spot rates uniquely.'
   });
 
   return { bad: false, msgs, bonds, C, prices, yields, d, spots, cond };
@@ -462,20 +505,21 @@ function bind(id, setter, min, max, decimals) {
 
 function buildBondTable() {
   const mode = state.mode;
-  const arr = mode === 3 ? state.s : state.py;
+  const n = state.n;
+  const arr = curBonds();
   const priceIsInput = (mode === 1);
   const yieldIsInput = (mode === 2);
 
-  let h = '<tr><th>Bond</th><th>Maturity</th><th>Coupon (%)</th>' +
-          '<th>Yr 1 CF</th><th>Yr 2 CF</th><th>Yr 3 CF</th>' +
-          '<th>Price</th><th>Yield (%)</th></tr>';
+  let h = '<tr><th>Bond</th><th>Maturity</th><th>Coupon (%)</th>';
+  for (let t = 1; t <= n; t++) h += '<th>Yr ' + t + ' CF</th>';
+  h += '<th>Price</th><th>Yield (%)</th></tr>';
 
   arr.forEach((b, i) => {
     h += '<tr>' +
       '<td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + BOND_HEX[i] + ';margin-right:.45rem"></span>' + NAMES[i] + '</td>' +
-      '<td class="editable">' + cellInput('mat-' + i, b.mat, 1, 3, 1, 0) + '</td>' +
+      '<td class="editable">' + cellInput('mat-' + i, b.mat, 1, n, 1, 0) + '</td>' +
       '<td class="editable">' + cellInput('cpn-' + i, b.cpn * 100, 0, 25, 0.25, 3) + '</td>' +
-      '<td id="cf-' + i + '-0"></td><td id="cf-' + i + '-1"></td><td id="cf-' + i + '-2"></td>' +
+      Array.from({ length: n }, (_, j) => '<td id="cf-' + i + '-' + j + '"></td>').join('') +
       (priceIsInput
         ? '<td class="editable">' + cellInput('price-' + i, b.price, 1, 300, 0.25, 3) + '</td>'
         : '<td class="out" id="price-out-' + i + '"></td>') +
@@ -487,7 +531,7 @@ function buildBondTable() {
   document.getElementById('bond-table').innerHTML = h;
 
   arr.forEach((b, i) => {
-    bind('mat-' + i,   v => { b.mat = v; },       1,   3,   0);
+    bind('mat-' + i,   v => { b.mat = v; },       1,   n,   0);
     bind('cpn-' + i,   v => { b.cpn = v / 100; }, 0,   25,  3);
     if (priceIsInput) bind('price-' + i, v => { b.price = v; },     1,   300, 3);
     if (yieldIsInput) bind('yld-' + i,   v => { b.yld = v / 100; }, -50, 100, 3);
@@ -496,16 +540,18 @@ function buildBondTable() {
 
 function buildSpotTable() {
   const editable = (state.mode === 3);
+  const n = state.n;
+  const sp = curSpots();
   let h = '<tr><th>Year</th><th>Spot rate (%)</th></tr>';
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < n; i++) {
     h += '<tr><td>' + (i + 1) + '</td>' +
       (editable
-        ? '<td class="editable" style="width:9rem">' + cellInput('spot-' + i, state.spots[i] * 100, -50, 100, 0.05, 3) + '</td>'
+        ? '<td class="editable" style="width:9rem">' + cellInput('spot-' + i, sp[i] * 100, -50, 100, 0.05, 3) + '</td>'
         : '<td class="out" id="spot-out-' + i + '" style="width:9rem"></td>') +
       '</tr>';
   }
   document.getElementById('spot-table').innerHTML = h;
-  if (editable) for (let i = 0; i < 3; i++) bind('spot-' + i, v => { state.spots[i] = v / 100; }, -50, 100, 3);
+  if (editable) for (let i = 0; i < n; i++) bind('spot-' + i, v => { sp[i] = v / 100; }, -50, 100, 3);
   document.getElementById('spot-title').textContent = editable ? 'Spot rates you set' : 'Spot rates';
 }
 
@@ -592,8 +638,9 @@ function setCell(id, text, na) {
 }
 
 function renderOutputs(M) {
-  for (let i = 0; i < 3; i++) {
-    for (let j = 0; j < 3; j++) {
+  const n = state.n;
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
       const v = M.C[i][j];
       setCell('cf-' + i + '-' + j, fmtNum(v, 3), v === 0);
     }
@@ -657,7 +704,8 @@ function drawCurve(M) {
   const pad = (hi - lo) * 0.22;
   lo -= pad; hi += pad;
 
-  const X = t => L + (t / 3) * pw;
+  const n = state.n;
+  const X = t => L + (t / n) * pw;
   const Y = r => T + ph - ((r - lo) / (hi - lo)) * ph;
 
   ctx.strokeStyle = '#eeebe6'; ctx.lineWidth = 1;
@@ -675,12 +723,12 @@ function drawCurve(M) {
   ctx.strokeStyle = '#d8d4cd'; ctx.lineWidth = 1.2;
   ctx.beginPath(); ctx.moveTo(L, T + ph); ctx.lineTo(L + pw, T + ph); ctx.stroke();
   ctx.font = '12px ' + MONO; ctx.fillStyle = '#6b7280'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  for (let t = 0; t <= 3; t++) ctx.fillText(String(t), X(t), T + ph + 9);
+  for (let t = 0; t <= n; t++) ctx.fillText(String(t), X(t), T + ph + 9);
   ctx.font = '13px ' + SERIF;
   ctx.fillText('Maturity (years)', L + pw / 2, T + ph + 31);
 
   const pts = [];
-  for (let i = 0; i < 3; i++) if (M.spots[i] !== null && isFinite(M.spots[i])) pts.push([X(i + 1), Y(M.spots[i])]);
+  for (let i = 0; i < n; i++) if (M.spots[i] !== null && isFinite(M.spots[i])) pts.push([X(i + 1), Y(M.spots[i])]);
   if (pts.length > 1) {
     ctx.strokeStyle = '#0072B2'; ctx.lineWidth = 2.4;
     ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke();
@@ -693,7 +741,7 @@ function drawCurve(M) {
 
   ctx.font = '600 12px ' + MONO; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
   ctx.fillStyle = '#0072B2';
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < n; i++) {
     if (M.spots[i] === null || !isFinite(M.spots[i])) continue;
     const txt = 'r' + (i + 1) + ' = ' + (100 * M.spots[i]).toFixed(3) + '%';
     const half = ctx.measureText(txt).width / 2 + 2;
@@ -878,9 +926,11 @@ function drawForwardChart(F) {
    TOP-LEVEL
    ========================================================================= */
 const HINTS = {
-  1: 'Type three prices. Each bond\u2019s yield is the single rate that reproduces its own price; the spot rates are the three rates that price all three bonds at once.',
-  2: 'Type three yields. Each bond is priced off its own yield, and those prices are then stripped into spot rates. Notice how far the spot curve sits from the yields you typed.',
-  3: 'Set the spot curve below. Every bond is priced off the same discount factors, and its yield falls out as the single rate that reproduces that price.'
+  1: n => 'Type ' + WORD[n] + ' prices. Each bond\u2019s yield is the single rate that reproduces its own price; the spot rates are the ' +
+          WORD[n] + ' rates that price ' + allBonds(n) + ' at once.',
+  2: n => 'Type ' + WORD[n] + ' yields. Each bond is priced off its own yield, and those prices are then stripped into spot rates. ' +
+          'Notice how far the spot curve sits from the yields you typed.',
+  3: n => 'Set the spot curve below. Every bond is priced off the same discount factors, and its yield falls out as the single rate that reproduces that price.'
 };
 
 function render() {
@@ -904,7 +954,11 @@ function rebuild() {
   if (isFwd) {
     buildForwardControls();
   } else {
-    document.getElementById('mode-hint').textContent = HINTS[state.mode];
+    document.getElementById('mode-hint').textContent = HINTS[state.mode](state.n);
+    document.querySelectorAll('#n-seg button').forEach(b => b.classList.toggle('on', +b.dataset.n === state.n));
+    // only the 3-bond defaults are the spreadsheet's problems
+    document.getElementById('reset-bonds').textContent =
+      state.n === 3 ? 'Reset to spreadsheet defaults' : 'Reset to defaults';
     buildBondTable();
     buildSpotTable();
   }
@@ -920,12 +974,25 @@ document.getElementById('tabs').addEventListener('click', ev => {
   rebuild();
 });
 
+// Each size keeps its own edits, so switching 3 -> 4 -> 3 brings your 3-bond
+// problem back untouched.
+document.getElementById('n-seg').addEventListener('click', ev => {
+  const btn = ev.target.closest('button');
+  if (!btn) return;
+  const n = parseInt(btn.dataset.n, 10);
+  if (n === state.n) return;
+  state.n = n;
+  rebuild();
+});
+
+// Reset touches only the current size and tab family.
 document.getElementById('reset-bonds').addEventListener('click', () => {
+  const n = state.n;
   if (state.mode === 3) {
-    state.s = DEFAULTS.s.map(b => ({ ...b }));
-    state.spots = DEFAULTS.spots.slice();
+    state.s[n] = cloneBonds(DEFAULTS.s[n]);
+    state.spots[n] = DEFAULTS.spots[n].slice();
   } else {
-    state.py = DEFAULTS.py.map(b => ({ ...b }));
+    state.py[n] = cloneBonds(DEFAULTS.py[n]);
   }
   rebuild();
 });
