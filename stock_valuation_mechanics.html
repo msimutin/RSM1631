@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stock Valuation Mechanics with a Perpetuity: RSM 1631</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --color-explicit: #0072B2;   /* blue  : individually-discounted CFs */
+    --color-perp:     #E69F00;   /* orange: perpetuity CFs              */
+    --color-value:    #009E73;   /* green : present value / V0          */
+    --perp-band:      rgba(230,159,0,0.10);
+    --perp-band-edge: rgba(230,159,0,0.32);
+
+    --bg: #faf9f7; --panel-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b7280;
+    --border: #e5e2dd; --accent: #1a1a1a; --input-bg: #f5f4f2;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  }
+  body { font-family: 'Source Serif 4', Georgia, serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 2rem 1.5rem; }
+  .container { max-width: 1120px; margin: 0 auto; }
+
+  h1 { font-size: 1.6rem; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 0.25rem; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.75rem; }
+
+  .panel {
+    background: var(--panel-bg); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: var(--shadow); padding: 1.4rem 1.5rem; margin-bottom: 1.25rem;
+  }
+
+  .section-label {
+    font-size: 0.78rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 1rem;
+    display: flex; align-items: center; gap: 0.55rem;
+  }
+  .section-label .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  /* ---- Top control grid: T / g / r ---- */
+  .levers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem 2rem; }
+  @media (max-width: 720px){ .levers { grid-template-columns: 1fr; } }
+
+  .slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem; gap: 0.6rem; }
+  .slider-header label { font-family: 'IBM Plex Mono', monospace; font-size: 0.82rem; font-weight: 500; color: var(--text-muted); }
+  .field-right { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .num-mini {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.9rem; font-weight: 600; color: var(--text);
+    width: 62px; text-align: right; padding: 0.25rem 0.45rem; border: 1px solid var(--border);
+    border-radius: 6px; background: var(--input-bg); -moz-appearance: textfield;
+  }
+  .num-mini::-webkit-inner-spin-button, .num-mini::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .num-mini:focus { outline: none; border-color: var(--accent); }
+  .unit { font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; color: var(--text-muted); }
+
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 6px;
+    border-radius: 3px; background: var(--border); outline: none; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%;
+    background: var(--accent); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+    cursor: pointer; transition: transform 0.1s;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+  input[type="range"]::-moz-range-thumb {
+    width: 18px; height: 18px; border-radius: 50%; background: var(--accent);
+    border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.25); cursor: pointer;
+  }
+
+  /* ---- Cash-flow inputs ---- */
+  .cf-divider { height: 1px; background: var(--border); margin: 1.4rem 0 1.2rem; }
+  .cf-row { display: flex; align-items: flex-end; gap: 0.8rem; flex-wrap: wrap; }
+  .cf-grid { display: flex; flex-wrap: wrap; gap: 0.8rem; }
+  .cf-group { display: flex; flex-direction: column; gap: 0.25rem; width: 110px; }
+  .cf-group label { font-family: 'IBM Plex Mono', monospace; font-size: 0.86rem; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+  .cf-input-wrap { position: relative; }
+  .cf-input-wrap::before { content: "$"; position: absolute; left: 0.5rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-family: 'IBM Plex Mono', monospace; font-size: 0.85rem; }
+  .cf-group input[type="number"] {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.88rem; padding: 0.45rem 0.55rem 0.45rem 1.25rem;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--input-bg); color: var(--text);
+    width: 100%; transition: border-color 0.15s; -moz-appearance: textfield;
+  }
+  .cf-group input[type="number"]::-webkit-inner-spin-button,
+  .cf-group input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .cf-group input[type="number"]:focus { outline: none; border-color: var(--accent); }
+  .cf-group.is-perp input[type="number"] { border-color: var(--color-perp); }
+
+  .reset-btn {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; font-weight: 500;
+    padding: 0.5rem 0.95rem; border: 1px solid var(--border); border-radius: 6px;
+    background: transparent; color: var(--text-muted); cursor: pointer; transition: all 0.15s;
+    margin-left: auto; white-space: nowrap;
+  }
+  .reset-btn:hover { border-color: var(--accent); color: var(--text); background: var(--input-bg); }
+
+  /* ---- Figure ---- */
+  .figure-panel { padding: 0.75rem 0.75rem 0.5rem; overflow: hidden; }
+  svg.timeline { width: 100%; height: auto; display: block; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 1.1rem; padding: 0.4rem 1rem 0.7rem; }
+  .legend-item { display: flex; align-items: center; gap: 0.45rem; font-size: 0.82rem; color: var(--text-muted); font-family: 'IBM Plex Mono', monospace; }
+  .legend-swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+
+  /* ---- Results ---- */
+  .results-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; }
+  .v0-big { font-family: 'IBM Plex Mono', monospace; font-size: 1.9rem; font-weight: 600; color: var(--color-value); }
+
+  table.breakdown { width: 100%; border-collapse: collapse; margin-top: 1.1rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.86rem; }
+  table.breakdown th, table.breakdown td { text-align: right; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); }
+  table.breakdown th:first-child, table.breakdown td:first-child { text-align: left; }
+  table.breakdown thead th { color: var(--text-muted); font-weight: 500; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  table.breakdown tr.subtotal td { font-weight: 600; }
+  table.breakdown tr.grand td { font-weight: 600; color: var(--color-value); border-bottom: none; border-top: 2px solid var(--border); }
+  td .swatch { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+
+  .warn {
+    margin-top: 1rem; padding: 0.7rem 0.9rem; border-radius: 8px;
+    background: #fdf0e8; border: 1px solid #f0c9ad; color: #8a4b1e;
+    font-size: 0.86rem; display: none;
+  }
+  .warn.show { display: block; }
+
+  .footnote { color: var(--text-muted); font-size: 0.82rem; margin-top: 1rem; line-height: 1.5; }
+  .footnote code { font-family: 'IBM Plex Mono', monospace; background: var(--input-bg); padding: 1px 5px; border-radius: 4px; font-size: 0.8rem; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Stock Valuation Mechanics with a Perpetuity: RSM 1631</h1>
+  <p class="subtitle">
+    Forecast the first T cash flows individually. From the T<sup>th</sup> cash flow onward,
+    assume a perpetuity growing at rate g forever. The fair value V<sub>0</sub> is the present value of all cash flows,
+    discounted at r.
+  </p>
+
+  <!-- ============ CONTROLS ============ -->
+  <div class="panel">
+    <div class="section-label"><span class="dot" style="background:var(--accent)"></span>Parameters</div>
+
+    <div class="levers">
+      <div class="slider-block">
+        <div class="slider-header">
+          <label for="Nrange">Forecast horizon,&nbsp;T ≤ 7</label>
+          <div class="field-right"><input type="number" class="num-mini" id="Nnum" min="1" max="7" step="1" value="3"></div>
+        </div>
+        <input type="range" id="Nrange" min="1" max="7" step="1" value="3">
+      </div>
+      <div class="slider-block">
+        <div class="slider-header">
+          <label for="grange">Perpetual growth,&nbsp;&minus;3% ≤ g ≤ 9%</label>
+          <div class="field-right"><input type="number" class="num-mini" id="gnum" min="-3" max="9" step="0.1" value="4.0"><span class="unit">%</span></div>
+        </div>
+        <input type="range" id="grange" min="-3" max="9" step="0.1" value="4">
+      </div>
+      <div class="slider-block">
+        <div class="slider-header">
+          <label for="rrange">Discount rate,&nbsp;0% ≤ r ≤ 25%</label>
+          <div class="field-right"><input type="number" class="num-mini" id="rnum" min="0" max="25" step="0.1" value="14.0"><span class="unit">%</span></div>
+        </div>
+        <input type="range" id="rrange" min="0" max="25" step="0.1" value="14">
+      </div>
+    </div>
+
+    <div class="cf-divider"></div>
+    <div class="section-label" style="margin-bottom:0.8rem"><span class="dot" style="background:var(--accent)"></span>Forecasted cash flows</div>
+    <div class="cf-row">
+      <div class="cf-grid" id="cfGrid"></div>
+      <button class="reset-btn" id="resetBtn">Reset</button>
+    </div>
+  </div>
+
+  <!-- ============ FIGURE ============ -->
+  <div class="panel figure-panel">
+    <div id="svgHost"></div>
+    <div class="legend">
+      <span class="legend-item"><span class="legend-swatch" style="background:var(--color-explicit)"></span>Explicit CF (discounted individually)</span>
+      <span class="legend-item"><span class="legend-swatch" style="background:var(--color-perp)"></span>Perpetuity CF (T onward)</span>
+      <span class="legend-item"><span class="legend-swatch" style="background:var(--color-value)"></span>Present value today</span>
+    </div>
+  </div>
+
+  <!-- ============ RESULTS ============ -->
+  <div class="panel">
+    <div class="results-head">
+      <div class="section-label" style="margin-bottom:0"><span class="dot" style="background:var(--color-value)"></span>Fair (intrinsic) value today <span style="text-transform:none">(t = 0)</span></div>
+      <div class="v0-big" id="v0big">$44.62</div>
+    </div>
+
+    <div class="warn" id="warn"></div>
+    <table class="breakdown" id="breakdown"></table>
+
+    <p class="footnote">
+      The perpetuity is valued one period before its first payment:
+      <code>PV<sub>T−1</sub> = CF<sub>T</sub> / (r − g)</code>, then discounted back to today by
+      <code>(1 + r)<sup>T−1</sup></code>. The first T − 1 cash flows are each discounted individually.
+      Requires <code>r &gt; g</code>.
+    </p>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const $ = id => document.getElementById(id);
+const SUB = "₀₁₂₃₄₅₆₇₈₉";
+const sub = n => String(n).split("").map(d => SUB[+d] || d).join("");
+const money = x => (x < 0 ? "-$" : "$") + Math.abs(x).toFixed(2);
+
+// PDF defaults: 3.50, 4.00, 5.00 reproduce the slide (V0 = 44.62)
+const DEFAULT_CF = [3.50, 4.00, 5.00, 5.50, 6.00, 6.50, 7.00];
+
+const state = { N: 3, cf: DEFAULT_CF.slice(0, 3), g: 4, r: 14 };  // g, r in percent; N is the horizon T
+
+const TAIL = 4;                 // ghost perpetuity years drawn beyond t=T
+const GROUP_THRESHOLD = 4;      // if (T-1) > this, group the explicit-CF discount arrows
+
+/* ---------------- Cash-flow input fields ---------------- */
+function buildCFInputs() {
+  const grid = $("cfGrid");
+  grid.innerHTML = "";
+  for (let i = 1; i <= state.N; i++) {
+    const isPerp = (i === state.N);
+    const col = isPerp ? "var(--color-perp)" : "var(--color-explicit)";
+    const wrap = document.createElement("div");
+    wrap.className = "cf-group" + (isPerp ? " is-perp" : "");
+    wrap.innerHTML =
+      `<label style="color:${col}">CF${sub(i)} <span style="color:var(--text-muted);font-weight:400">(t=${i})</span></label>` +
+      `<div class="cf-input-wrap"><input type="number" step="0.01" data-i="${i-1}" value="${state.cf[i-1].toFixed(2)}"></div>`;
+    grid.appendChild(wrap);
+  }
+  grid.querySelectorAll('input[type="number"]').forEach(inp => {
+    inp.addEventListener("input", e => {
+      const idx = +e.target.dataset.i;
+      const v = parseFloat(e.target.value);
+      state.cf[idx] = isNaN(v) ? 0 : v;
+      render();
+    });
+  });
+}
+
+function resizeCF() {
+  const next = [];
+  for (let i = 0; i < state.N; i++) {
+    next[i] = (i < state.cf.length) ? state.cf[i]
+            : (DEFAULT_CF[i] != null ? DEFAULT_CF[i] : (state.cf[state.cf.length - 1] || 5) + 0.5);
+  }
+  state.cf = next;
+  buildCFInputs();
+}
+
+/* ---------------- Valuation ---------------- */
+function compute() {
+  const r = state.r / 100, g = state.g / 100, N = state.N;
+  const valid = r > g;
+
+  const explicit = [];
+  let sumExplicit = 0;
+  for (let t = 1; t <= N - 1; t++) {              // individually-discounted CFs, t = 1..T-1
+    const cf = state.cf[t - 1];
+    const pv = cf / Math.pow(1 + r, t);
+    explicit.push({ t, cf, pv });
+    sumExplicit += pv;
+  }
+
+  const cfN = state.cf[N - 1];                      // CF_T = first perpetuity payment (at t = T)
+  const perpAtNm1 = valid ? cfN / (r - g) : NaN;    // valued at t = T-1
+  const pvPerp = valid ? perpAtNm1 / Math.pow(1 + r, N - 1) : NaN;
+  const total = valid ? sumExplicit + pvPerp : NaN;
+  return { valid, explicit, sumExplicit, cfN, perpAtNm1, pvPerp, total };
+}
+
+/* ---------------- Figure (SVG) ---------------- */
+const W = 1000;
+const PLOT_L = 66, PLOT_R = 895;
+const BASE = 320;          // time axis
+const BAR_MAX = 150;       // tallest bar height
+
+function buildSVG(res) {
+  const N = state.N;
+  const r = state.r / 100, g = state.g / 100;
+  const lastYear = N + TAIL;
+  const dx = (PLOT_R - PLOT_L) / lastYear;
+  const x = t => PLOT_L + t * dx;
+  const x0 = x(0);
+  const rightEnd = Math.min(x(lastYear) + dx * 0.55, 980);
+
+  // Cash flows on the timeline
+  const bars = [];
+  for (let t = 1; t <= N - 1; t++) bars.push({ t, cf: state.cf[t - 1], kind: "explicit" });
+  bars.push({ t: N, cf: res.cfN, kind: "perpStart" });
+  for (let k = 1; k <= TAIL; k++) bars.push({ t: N + k, cf: res.cfN * Math.pow(1 + g, k), kind: "ghost" });
+
+  const maxCF = Math.max(...bars.map(b => b.cf), 0.01);
+  const barH = cf => Math.max(3, (Math.max(cf, 0) / maxCF) * BAR_MAX);
+  const bw = Math.min(dx * 0.46, 30);
+
+  let contentBottom = BASE + 44;   // tracks lowest drawn element, for cropping the viewBox
+  let s = `<svg class="timeline" viewBox="0 80 ${W} __VBH__" xmlns="http://www.w3.org/2000/svg" font-family="'IBM Plex Mono', monospace">`;
+  s += `<defs>
+    <marker id="ahPerp" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="${cv('--color-perp')}"/></marker>
+    <marker id="ahDisc" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="${cv('--color-value')}"/></marker>
+    <marker id="ahTime" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="${cv('--text-muted')}"/></marker>
+  </defs>`;
+
+  // perpetuity highlight band
+  const bandX = x(N) - dx * 0.5;
+  const bandRight = rightEnd + 2;
+  s += `<rect x="${bandX.toFixed(1)}" y="110" width="${(bandRight - bandX).toFixed(1)}" height="${BASE - 110}" fill="${cv('--perp-band')}" stroke="${cv('--perp-band-edge')}" stroke-width="1" stroke-dasharray="4 4" rx="6"/>`;
+  s += `<text x="${(bandRight - 8).toFixed(1)}" y="127" text-anchor="end" fill="${cv('--color-perp')}" font-weight="600"><tspan font-size="12">perpetuity </tspan><tspan font-size="15">→ ∞</tspan></text>`;
+
+  // time axis (with arrow + "Time")
+  s += `<line x1="${PLOT_L}" y1="${BASE}" x2="${rightEnd.toFixed(1)}" y2="${BASE}" stroke="${cv('--text')}" stroke-width="1.5" marker-end="url(#ahTime)"/>`;
+  s += txt(rightEnd, BASE - 8, "Time", 12, cv('--text-muted'), "end", 500);
+  for (let t = 0; t <= lastYear; t++) {
+    const xt = x(t);
+    s += `<line x1="${xt}" y1="${BASE - 4}" x2="${xt}" y2="${BASE + 4}" stroke="${cv('--text-muted')}" stroke-width="1"/>`;
+    s += txt(xt, BASE + 20, String(t), 11.5, cv('--text-muted'), "middle");
+  }
+
+  // cash-flow bars + value labels (explicit = blue, all perpetuity = orange)
+  for (const b of bars) {
+    const h = barH(b.cf);
+    const xt = x(b.t);
+    const top = BASE - h;
+    const isExp = (b.kind === "explicit");
+    const fill = isExp ? cv('--color-explicit') : cv('--color-perp');
+    const op = (b.kind === "ghost") ? 0.30 : 1;
+    s += `<rect x="${(xt - bw/2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${fill}" opacity="${op}" rx="2"/>`;
+    const labCol = isExp ? cv('--color-explicit') : cv('--color-perp');
+    const labWt = (b.kind === "ghost") ? 500 : 600;
+    s += txt(xt, top - 6, money(b.cf).replace("$",""), 10.5, labCol, "middle", labWt);
+  }
+
+  // perpetuity collapse: curved arrow band -> diamond at t = T-1, one-line equation just above the arc
+  const nm1 = N - 1;
+  const xDia = x(nm1);
+  const diaY = BASE - 14;
+  if (res.valid) {
+    const Sx = x(N), Sy = 132;
+    const Ex = xDia + 6, Ey = diaY - 8;
+    const Cx = (Sx + Ex) / 2, Cy = 72;
+    s += `<path d="M ${Sx.toFixed(1)} ${Sy} Q ${Cx.toFixed(1)} ${Cy} ${Ex.toFixed(1)} ${Ey.toFixed(1)}" fill="none" stroke="${cv('--color-perp')}" stroke-width="2" marker-end="url(#ahPerp)"/>`;
+    s += `<path d="M ${xDia} ${diaY-8} L ${xDia+8} ${diaY} L ${xDia} ${diaY+8} L ${xDia-8} ${diaY} Z" fill="${cv('--color-perp')}" stroke="#fff" stroke-width="1.5"/>`;
+    const labX = clamp(Cx, PLOT_L + 160, PLOT_R - 120);
+    s += txt(labX, 104, "PV" + sub(nm1) + " = CF" + sub(N) + " / (r − g) = " + money(res.perpAtNm1), 13.5, cv('--text'), "middle", 600);
+  }
+
+  // discount everything back to t = 0 (below baseline)
+  const comps = [];   // {xs, pv, col}
+  const groupExplicit = (N - 1) > GROUP_THRESHOLD;
+  if (res.valid) {
+    if (groupExplicit && res.explicit.length > 0) {
+      const midT = (1 + (N - 1)) / 2;
+      comps.push({ xs: x(midT), label: "ΣPV(CF" + sub(1) + "…CF" + sub(N-1) + ") = " + money(res.sumExplicit), col: cv('--color-explicit') });
+      const bx1 = x(1), bx2 = x(N - 1), by = BASE + 30;
+      s += `<path d="M ${bx1} ${BASE+12} L ${bx1} ${by} L ${bx2} ${by} L ${bx2} ${BASE+12}" fill="none" stroke="${cv('--color-explicit')}" stroke-width="1.2" opacity="0.6"/>`;
+    } else {
+      for (const e of res.explicit) comps.push({ xs: x(e.t), label: money(e.pv), col: cv('--color-explicit') });
+    }
+    if (N >= 2) comps.push({ xs: xDia + 4, label: money(res.pvPerp), col: cv('--color-perp') });
+  }
+
+  // arrows: stroke fades from the source color (blue/orange) at the CF to green at t=0 (time value of money)
+  comps.forEach((c, i) => {
+    if (Math.abs(c.xs - x0) < 2) return;
+    c._depth = BASE + 48 + i * 22;
+    c._cx = (c.xs + x0) / 2;
+    const gid = "agrad" + i;
+    s += `<defs><linearGradient id="${gid}" gradientUnits="userSpaceOnUse" x1="${c.xs.toFixed(1)}" y1="${BASE}" x2="${x0.toFixed(1)}" y2="${BASE}">` +
+         `<stop offset="0" stop-color="${c.col}"/><stop offset="0.45" stop-color="${c.col}"/><stop offset="1" stop-color="${cv('--color-value')}"/>` +
+         `</linearGradient></defs>`;
+    s += `<path d="M ${c.xs.toFixed(1)} ${BASE + 12} Q ${c._cx.toFixed(1)} ${c._depth} ${(x0 + 2).toFixed(1)} ${BASE + 8}" fill="none" stroke="url(#${gid})" stroke-width="1.8" opacity="0.9" marker-end="url(#ahDisc)"/>`;
+  });
+
+  // labels: the final explicit-side PV and the perpetuity PV share ONE line (colors kept separate);
+  // any earlier explicit PVs get their own line
+  const perpIdx = (comps.length && comps[comps.length - 1].col === cv('--color-perp')) ? comps.length - 1 : -1;
+  if (perpIdx >= 1) {
+    for (let i = 0; i <= perpIdx - 2; i++) {
+      const c = comps[i];
+      if (c._cx == null) continue;
+      s += txt(c._cx, c._depth + 14, c.label, 13, c.col, "middle", 600);
+      contentBottom = Math.max(contentBottom, c._depth + 14);
+    }
+    const a = comps[perpIdx - 1], b = comps[perpIdx];
+    const yRow = Math.max(a._depth || 0, b._depth || 0) + 16;
+    const cxRow = ((a._cx || x0) + (b._cx || x0)) / 2;
+    s += `<text x="${cxRow.toFixed(1)}" y="${yRow}" font-size="13" text-anchor="middle" font-weight="600">` +
+         `<tspan fill="${a.col}">${escapeXML(a.label)}</tspan>` +
+         `<tspan fill="${cv('--text')}">  +  </tspan>` +
+         `<tspan fill="${b.col}">${escapeXML(b.label)}</tspan></text>`;
+    contentBottom = Math.max(contentBottom, yRow);
+  } else {
+    comps.forEach(c => {
+      if (c._cx == null) return;
+      s += txt(c._cx, c._depth + 14, c.label, 13, c.col, "middle", 600);
+      contentBottom = Math.max(contentBottom, c._depth + 14);
+    });
+  }
+
+  // total value node at t = 0, with V0 box directly ABOVE t = 0
+  if (res.valid) {
+    s += `<circle cx="${x0}" cy="${BASE}" r="6" fill="${cv('--color-value')}" stroke="#fff" stroke-width="2"/>`;
+    const boxX = 60, boxY = 138, boxW = 156, boxH = 34;
+    s += `<line x1="${x0}" y1="${boxY + boxH}" x2="${x0}" y2="${BASE - 7}" stroke="${cv('--color-value')}" stroke-width="1" stroke-dasharray="3 3" opacity="0.7"/>`;
+    s += `<rect x="${boxX}" y="${boxY}" width="${boxW}" height="${boxH}" rx="7" fill="#fff" stroke="${cv('--color-value')}" stroke-width="1.5"/>`;
+    s += txt(boxX + 14, boxY + 22, "V" + sub(0) + " = " + money(res.total), 15, cv('--color-value'), "start", 600);
+  }
+
+  const vbH = Math.max(300, (contentBottom + 18) - 80);
+  s = s.replace("__VBH__", vbH.toFixed(0));
+  s += `</svg>`;
+  return s;
+}
+
+function txt(x, y, str, size, fill, anchor, weight) {
+  return `<text x="${(+x).toFixed(1)}" y="${(+y).toFixed(1)}" font-size="${size}" fill="${fill}" text-anchor="${anchor || 'start'}" font-weight="${weight || 400}">${escapeXML(str)}</text>`;
+}
+function escapeXML(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+function cv(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+/* ---------------- Results table ---------------- */
+function buildBreakdown(res) {
+  const N = state.N;
+  let rows = `<thead><tr><th>Component</th><th>Cash flow</th><th>Discount</th><th>PV today</th></tr></thead><tbody>`;
+  for (const e of res.explicit) {
+    const pvBold = (res.explicit.length === 1) ? ' style="font-weight:600"' : '';
+    rows += `<tr><td><span class="swatch" style="background:var(--color-explicit)"></span>CF${sub(e.t)} at t=${e.t}</td>` +
+            `<td>${money(e.cf)}</td><td>÷(1+r)<sup>${e.t}</sup></td><td${pvBold}>${money(e.pv)}</td></tr>`;
+  }
+  if (res.explicit.length > 1) {
+    rows += `<tr><td>Subtotal — explicit CFs</td><td></td><td></td><td style="font-weight:600">${money(res.sumExplicit)}</td></tr>`;
+  }
+  if (res.valid) {
+    rows += `<tr><td><span class="swatch" style="background:var(--color-perp)"></span>Perpetuity value at t=${N-1}</td>` +
+            `<td>${money(res.cfN)}</td><td>÷(r−g)</td><td>${money(res.perpAtNm1)}</td></tr>`;
+    rows += `<tr><td><span class="swatch" style="background:var(--color-perp)"></span>↳ PV of perpetuity today</td>` +
+            `<td></td><td>÷(1+r)<sup>${N-1}</sup></td><td style="font-weight:600">${money(res.pvPerp)}</td></tr>`;
+    rows += `<tr class="grand"><td>Fair (intrinsic) value</td><td></td><td></td><td>${money(res.total)}</td></tr>`;
+  }
+  rows += `</tbody>`;
+  $("breakdown").innerHTML = rows;
+}
+
+/* ---------------- Master render ---------------- */
+function syncControls() {
+  if (document.activeElement !== $("Nnum")) $("Nnum").value = state.N;
+  if (document.activeElement !== $("gnum")) $("gnum").value = state.g.toFixed(1);
+  if (document.activeElement !== $("rnum")) $("rnum").value = state.r.toFixed(1);
+  $("Nrange").value = state.N;
+  $("grange").value = state.g;
+  $("rrange").value = state.r;
+}
+
+function render() {
+  syncControls();
+  const res = compute();
+  $("svgHost").innerHTML = buildSVG(res);
+  buildBreakdown(res);
+
+  const warn = $("warn");
+  if (!res.valid) {
+    warn.classList.add("show");
+    warn.innerHTML = `The discount rate must exceed the perpetual growth rate (<strong>r &gt; g</strong>) for the perpetuity to have a finite value. ` +
+                     `Right now r = ${state.r.toFixed(1)}% and g = ${state.g.toFixed(1)}%. Lower g or raise r.`;
+    $("v0big").textContent = "—";
+  } else {
+    warn.classList.remove("show");
+    $("v0big").textContent = money(res.total);
+  }
+}
+
+/* ---------------- Wiring (slider + direct entry) ---------------- */
+function setN(v){ if (isNaN(v)) return; v = clamp(Math.round(v), 1, 7); state.N = v; resizeCF(); render(); }
+function setG(v){ if (isNaN(v)) return; state.g = clamp(Math.round(v * 10) / 10, -3, 9); render(); }
+function setR(v){ if (isNaN(v)) return; state.r = clamp(Math.round(v * 10) / 10, 0, 25); render(); }
+
+$("Nrange").addEventListener("input", e => setN(+e.target.value));
+$("Nnum").addEventListener("input",   e => { if (e.target.value !== "") setN(+e.target.value); });
+$("grange").addEventListener("input", e => setG(+e.target.value));
+$("gnum").addEventListener("input",   e => { if (e.target.value !== "") setG(+e.target.value); });
+$("rrange").addEventListener("input", e => setR(+e.target.value));
+$("rnum").addEventListener("input",   e => { if (e.target.value !== "") setR(+e.target.value); });
+
+// On commit (blur / Enter): force the box to show the final integer / clamped value, so clamping is explicit
+$("Nnum").addEventListener("change", () => {
+  let v = parseFloat($("Nnum").value); if (isNaN(v)) v = state.N;
+  v = clamp(Math.round(v), 1, 7); state.N = v; $("Nnum").value = v; resizeCF(); render();
+});
+$("gnum").addEventListener("change", () => {
+  let v = parseFloat($("gnum").value); if (isNaN(v)) v = state.g;
+  v = clamp(Math.round(v * 10) / 10, -3, 9); state.g = v; $("gnum").value = v.toFixed(1); render();
+});
+$("rnum").addEventListener("change", () => {
+  let v = parseFloat($("rnum").value); if (isNaN(v)) v = state.r;
+  v = clamp(Math.round(v * 10) / 10, 0, 25); state.r = v; $("rnum").value = v.toFixed(1); render();
+});
+
+$("resetBtn").addEventListener("click", () => {
+  state.N = 3; state.cf = DEFAULT_CF.slice(0, 3); state.g = 4; state.r = 14;
+  buildCFInputs();
+  render();
+});
+
+let rt;
+window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(render, 80); });
+
+buildCFInputs();
+render();
+</script>
+</body>
+</html>
